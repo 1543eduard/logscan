@@ -10439,6 +10439,13 @@ FA_RULES = {
 }
 
 
+# v50: PrestaShop 1.7+ (ps_facetedsearch) -- filtrele vin in ?q= ca
+# "Fateta-valoare-valoare/Fateta2-valoare" (ex. q=Categorii-BATERII/Marca-Tenax),
+# sortarea in ?order=product.<camp>.<asc|desc>; 1.6 (blocklayered) foloseste
+# selected_filters. q= simplu (cautare: ?q=cuvant) NU e filtru.
+_FA_PS_FACET_RE = re.compile(r"^(?!https?%3a|https?:)[^-/=&]{2,60}-[^&]+$", re.I)
+
+
 def _fa_keys(url):
     """-> (lista cheilor de filtrare, e_fateta_in_path)"""
     q = url.split("?", 1)
@@ -10446,11 +10453,18 @@ def _fa_keys(url):
     keys = []
     if len(q) > 1:
         for tok in q[1].split("&"):
-            k = tok.split("=", 1)[0].lower()
-            k = k.replace("%5b", "[").split("[", 1)[0]
-            if k in _FA_KEY_EXACT or k.startswith(_FA_KEY_PREFIX):
-                if k not in keys:
-                    keys.append(k)
+            k, _, v = tok.partition("=")
+            k = k.lower().replace("%5b", "[").split("[", 1)[0]
+            if k in _FA_KEY_EXACT or k.startswith(_FA_KEY_PREFIX) or k == "selected_filters":
+                pass
+            elif k == "q" and _FA_PS_FACET_RE.match(v):
+                k = "q="                 # fragment din URL: folosit si ca filtru "path contine" in UI
+            elif k == "order" and v.lower().startswith("product."):
+                k = "order=product."
+            else:
+                continue
+            if k not in keys:
+                keys.append(k)
     facet = ("&" in po or "*" in po) and not po.lower().endswith((".js", ".css", ".png", ".jpg", ".svg", ".woff2"))
     return keys, facet
 

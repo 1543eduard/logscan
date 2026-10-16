@@ -1955,7 +1955,7 @@
     <!-- v49.1: ATACURI PE FILTRE -- vizibil implicit -->
     <section class="card faCard" id="faCard" aria-labelledby="faTitle">
       <div class="sfHead"><h2 id="faTitle">Atacuri pe filtre</h2><span id="faVerdictTag"></span>
-        <span class="secHint">Enumerare a filtrelor de magazin (filter_*, filtru=, orderby, min/max_price, fatete in path), calculata exact pe selectia curenta.</span></div>
+        <span class="secHint">Enumerare a filtrelor de magazin (WooCommerce filter_* / orderby / min-max_price, PrestaShop q=Fateta-valoare / order=product.*, filtru=, fatete in path), calculata exact pe selectia curenta.</span></div>
       <div id="faMsg" class="incMsg"></div>
       <div id="faVerdict" class="faVerdict"></div>
       <div id="faStats" class="sfExec"></div>
@@ -9505,8 +9505,8 @@ const WK_PRESETS = [
     ['Scanare automată (majoritar 4xx)', [C('ip_err', 'range', [50, null]), C('ip_hits', 'range', [30, null])]],
     ['Rotație de User-Agent (5+ / IP)', [C('ip_uas', 'range', [5, null])]],
     ['Atac distribuit pe subnet', [C('subnet_hits', 'range', [500, null]), C('ip_hits', 'range', [null, 50])]],
-    ['Atac pe filtre (Woo / Presta)', [C('path', 'regex', ['[?&](filter_[^=&]*|query_type_[^=&]*|min_price|max_price|orderby|pa_[^=&]*)=']), C('crawler', 'in', ['verified'], true)]],
-    ['Atac pe filtre distribuit (1-3 cereri / IP)', [C('path', 'regex', ['[?&](filter_[^=&]*|query_type_[^=&]*|pa_[^=&]*)=']), C('ip_hits', 'range', [null, 3])]],
+    ['Atac pe filtre (Woo / Presta)', [C('path', 'regex', ['[?&](filter_[^=&]*|query_type_[^=&]*|min_price|max_price|orderby|pa_[^=&]*|selected_filters)=|[?&]q=[^&=/]{2,60}-|[?&]order=product\\.']), C('crawler', 'in', ['verified'], true)]],
+    ['Atac pe filtre distribuit (1-3 cereri / IP)', [C('path', 'regex', ['[?&](filter_[^=&]*|query_type_[^=&]*|pa_[^=&]*|selected_filters)=|[?&]q=[^&=/]{2,60}-|[?&]order=product\\.']), C('ip_hits', 'range', [null, 3])]],
     ['Scanare plugin-uri / teme WP (404)', [C('path_only', 'regex', ['^/wp-content/(plugins|themes)/']), C('status', 'in', ['404'])]],
     ['Enumerare utilizatori WP', [C('path', 'regex', ['[?&]author=\\d|/wp-json/wp/v2/users|/author/'])]],
     ['xmlrpc.php (brute force / pingback)', [C('path_only', 'suffix', ['xmlrpc.php'])]],

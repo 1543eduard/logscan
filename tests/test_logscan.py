@@ -1486,6 +1486,29 @@ def test_v50_comportament_automat():
     assert v["upload_gzip"] is True
 
 
+@test
+def test_v50_atac_pe_filtre_prestashop():
+    """PrestaShop (ps_facetedsearch): ?q=Fateta-valoare[/Fateta2-valoare] si
+    ?order=product.*.* sunt cereri de filtrare; ?q=cuvant (cautare) si q=URL nu."""
+    _need_store()
+    k = app._fa_keys
+    assert k("/2-acasa?q=Categorii-BATERII+SANITARE/Marca-Tenax&order=product.sales.desc")[0] == ["q=", "order=product."]
+    assert k("/2-acasa?order=product.price.asc&page=2")[0] == ["order=product."]
+    assert k("/cauta?q=baterie")[0] == [] and k("/x?q=https%3A//site.ro/a-b.html")[0] == []
+    att = [L(f"73.{i // 250}.{i % 250}.{i % 7 + 1}", "13/Oct/2026:06:%02d:%02d" % (i // 60 % 60, i % 60), "GET",
+             f"/2-acasa?q=Categorii-C{i % 40}/Marca-M{i % 9}&order=product.{('sales', 'price', 'name')[i % 3]}.desc", 503 if i % 5 == 0 else 200)
+           for i in range(400)]
+    att += [L("86.124.9.9", "13/Oct/2026:07:00:%02d" % i, "GET", f"/cauta?q=baterie{i}", 200) for i in range(50)]
+    d, path, part, summary, db, dcol, dbc, store = build_dataset(FIXTURE + att)
+    did = _register(store, dcol)
+    app.DATASETS[did]["summary_cache"] = {"ALL": summary}
+    st, fa = call(app.api_filter_attacks, dataset_id=did)
+    assert st == 200 and fa["detected"] and fa["severity"] == "HIGH", fa.get("verdict")
+    assert fa["filter_requests"] == 400 and fa["status"]["5xx"] == 80
+    t = {x["target"]: x for x in fa["targets"]}
+    assert "/2-acasa" in t and "/cauta" not in t
+
+
 if __name__ == "__main__":
     bad = [r for r in RESULTS if r[1]]
     for name, err in RESULTS:
