@@ -1,0 +1,49 @@
+#!/bin/bash
+# logscan -- porneste aplicatia pe un port aleator si afiseaza adresa.
+# Se opreste singura dupa LOGSCAN_MAXTIME (implicit 2h) sau cu Ctrl+C.
+#
+# Setari (variabile de mediu, toate optionale):
+#   LOGSCAN_HOST      adresa pe care asculta (implicit 0.0.0.0; pe calculatorul
+#                     propriu pune 127.0.0.1 ca sa nu fie accesibila din retea)
+#   LOGSCAN_PORT      port fix (implicit: aleator intre PORT_MIN si PORT_MAX)
+#   LOGSCAN_PORT_MIN / LOGSCAN_PORT_MAX   intervalul (implicit 21000-21099,
+#                     intervalul deschis in CSF pe serverul cPanel)
+#   LOGSCAN_MAXTIME   durata maxima (implicit 2h; 0 = fara limita)
+set -e
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+APP_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
+HOST="${LOGSCAN_HOST:-0.0.0.0}"
+PORT_MIN="${LOGSCAN_PORT_MIN:-21000}"
+PORT_MAX="${LOGSCAN_PORT_MAX:-21099}"
+MAXTIME="${LOGSCAN_MAXTIME:-2h}"
+PORT="${LOGSCAN_PORT:-$(( ( RANDOM % (PORT_MAX - PORT_MIN + 1) ) + PORT_MIN ))}"
+
+if [ ! -x "$APP_DIR/venv/bin/python" ]; then
+    echo "logscan: lipseste mediul Python ($APP_DIR/venv)."
+    echo "Ruleaza o data:  $APP_DIR/install.sh"
+    exit 1
+fi
+
+if [ "$HOST" = "127.0.0.1" ] || [ "$HOST" = "localhost" ]; then
+    SHOW="127.0.0.1"
+else
+    SHOW=$(curl -s -4 -m 3 ifconfig.me 2>/dev/null || true)
+    [ -n "$SHOW" ] || SHOW=$(hostname -I 2>/dev/null | awk '{print $1}')
+    [ -n "$SHOW" ] || SHOW="$HOST"
+fi
+
+echo "=================================================="
+echo " logscan $(sed -n 's/^LOGSCAN_VERSION = "\(.*\)"/v\1/p' "$APP_DIR/app.py") pornit"
+echo " Deschide in browser:  http://$SHOW:$PORT"
+if [ "$MAXTIME" = "0" ]; then
+    echo " Se opreste cu Ctrl+C"
+else
+    echo " Se opreste automat dupa $MAXTIME, sau cu Ctrl+C"
+fi
+echo "=================================================="
+
+cd "$APP_DIR"
+if [ "$MAXTIME" = "0" ]; then
+    exec venv/bin/python app.py --host "$HOST" --port "$PORT"
+fi
+exec timeout "$MAXTIME" venv/bin/python app.py --host "$HOST" --port "$PORT"
