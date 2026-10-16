@@ -34,6 +34,12 @@ git pull
 
 Atât: `bin/logscan` (și `logscan`, dacă ai folosit `--link`) pornește direct din folderul repo-ului. Dacă `requirements.txt` s-a schimbat, rulează încă o dată `./install.sh`.
 
+## Probleme cunoscute
+
+- **„NumPy was built with baseline optimizations (X86_V2) but your machine doesn't support (X86_V2)”**: numpy 2.4+ cere un procesor x86-64-v2, pe care unele mașini virtuale (model CPU generic, de ex. `qemu64`) nu îl expun. De aceea `requirements.txt` fixează numpy 2.3.5, care merge pe orice procesor x86-64. Dacă ai instalat o versiune mai veche a repo-ului: `git pull && ./install.sh`.
+- Fără numpy aplicația pornește oricum (pe indexul SQLite, mai lent, fără Workplace / incidente / rețele / reguli) și afișează la pornire cauza exactă.
+- Mesajul lung `KeyboardInterrupt` / `CancelledError` la Ctrl+C e normal (oprirea serverului web), nu o eroare.
+
 ## Setări pentru `bin/logscan`
 
 | Variabilă | Implicit | Ce face |
