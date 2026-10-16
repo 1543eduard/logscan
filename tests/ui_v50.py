@@ -120,6 +120,26 @@ with sync_playwright() as pw:
         return f"{shown}/{n_inc} incidente compacte (card {h}px), {sum(1 for c in cats if c['requests'])} categorii automate = API"
     check("Security: incidente compacte + activitate automata = API", t_security, page)
 
+    def t_networks():
+        goto(page, "ip")
+        page.wait_for_function("() => NET.data && NET.data.group === 'asn'", timeout=120000)
+        d = page.evaluate("NET.data")
+        rows = page.evaluate("document.querySelectorAll('#netBody tbody tr').length")
+        assert rows == min(50, len(d["groups"])), (rows, len(d["groups"]))
+        api_d = api(f"/api/dataset/{did}/networks?group=asn&max_hits=1&top=500")
+        assert api_d["matched_ips"] == d["matched_ips"] and api_d["n_groups"] == d["n_groups"]
+        page.select_option("#netGroup", "s24")
+        page.wait_for_function("() => NET.data && NET.data.group === 's24'", timeout=60000)
+        if d["groups"]:
+            page.select_option("#netGroup", "asn")
+            page.wait_for_function("() => NET.data && NET.data.group === 'asn'", timeout=60000)
+            page.locator("[data-net-wk]").first.click()
+            page.wait_for_function("() => CURRENT_PAGE === 'workplace' && WK.res && !WK.busy", timeout=60000)
+            got = page.evaluate("WK.res.unique_ips")
+            assert got == d["groups"][0]["ips"], (got, d["groups"][0])
+        return f"{d['n_groups']} furnizori, {d['matched_ips']} IP-uri cu o cerere; Workplace = {d['groups'][0]['ips'] if d['groups'] else 0} IP"
+    check("IP Explorer: retele (ASN / subnet) + Workplace cu aceleasi IP-uri", t_networks, page)
+
     def t_flags():
         goto(page, "countries")
         page.wait_for_function("() => document.querySelectorAll('#ctyMod img.flag').length > 0")

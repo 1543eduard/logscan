@@ -8681,6 +8681,7 @@ def _workplace_for(dataset_id):
     if wp is None or wp.s is not store:
         wp = workplace.Workplace(store, classify_ua, classify_composition, classify_crawler_claim,
                                  _log_tz_offset(ds))
+        wp.asn_name_of = lambda ip: _asn_lookup(ip)[0]   # v50: conditia 'Furnizor (ASN)' (baza se incarca la prima folosire)
         ds["_workplace"] = wp
     return ds, wp, None
 
@@ -10584,6 +10585,199 @@ def api_filter_attacks(dataset_id: str, gf: str = Query(default=""), top: int = 
     if err:
         return err
     return JSONResponse(_filter_attack_compute(ds, store, m, max(1, min(int(top), 5000))))
+
+
+# ==========================================================================
+# v50 -- RETELE: IP-urile (de obicei cele cu foarte putine cereri -- rotatie de
+# proxy / botnet) grupate pe furnizor (ASN), bloc de retea, /24 sau /16.
+# Baza ASN (geoip2fast-asn-ipv6.dat.gz, GeoLite2 ASN, IPv4 + IPv6) se incarca
+# DOAR la prima cerere a acestei rute (~0.8 s, ~190 MB) -- uploadul si
+# parsarea nu o folosesc.
+# ==========================================================================
+_ASN_FILE = os.path.join(_GEOIP_DIR, "geoip2fast-asn-ipv6.dat.gz")
+_asn_db = None
+_asn_tried = False
+_ASN_LOCK = threading.Lock()
+_ASN_MEMO: Dict[str, Any] = {}   # ip -> (asn_name, asn_cidr)
+_ASN_MEMO_CAP = 600_000
+
+
+def _asn_lookup(ip):
+    global _asn_db, _asn_tried
+    if not _asn_tried:
+        with _ASN_LOCK:
+            if not _asn_tried:
+                cls = globals().get("GeoIP2Fast")    # lipseste daca importul geoip2fast a esuat
+                if cls is not None and os.path.exists(_ASN_FILE):
+                    try:
+                        _asn_db = cls(geoip2fast_data_file=_ASN_FILE, verbose=False)
+                    except (Exception, SystemExit) as e:
+                        print(f"[asn] baza ASN indisponibila: {e}", flush=True)
+                        _asn_db = None
+                _asn_tried = True
+    hit = _ASN_MEMO.get(ip)
+    if hit is not None:
+        return hit
+    name, cidr = "", ""
+    if _asn_db is not None and ip:
+        try:
+            r = _asn_db.lookup(ip)
+            name = (getattr(r, "asn_name", "") or "").strip()
+            cidr = getattr(r, "asn_cidr", "") or getattr(r, "cidr", "") or ""
+        except Exception:
+            pass
+    out = (name, cidr)
+    if len(_ASN_MEMO) < _ASN_MEMO_CAP:
+        _ASN_MEMO[ip] = out
+    return out
+
+
+def _net_prefix(ip, bits4, bits6):
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return ""
+    n = ipaddress.ip_network(f"{ip}/{bits4 if a.version == 4 else bits6}", strict=False)
+    return str(n)
+
+
+# furnizori de cloud / gazduire (dupa numele ASN) -- restul sunt, in mare,
+# operatori de acces (internet fix / mobil): IP-uri "rezidentiale"
+_CLOUD_ASN_RE = re.compile(
+    r"amazon|\baws\b|google|microsoft|azure|oracle|alibaba|tencent|huawei cloud|digitalocean|linode|akamai|ovh|hetzner|"
+    r"contabo|vultr|choopa|leaseweb|m247|scaleway|online s\.a\.s|ionos|1&1|hostinger|godaddy|cloudflare|fastly|"
+    r"datacamp|cdn77|psychz|quadranet|colocrossing|hostwinds|interserver|liquid web|rackspace|servers\.com|"
+    r"zenlayer|g-core|gcore|kamatera|netcup|hosteurope|strato|aruba|ukfast|worldstream|serverius|nforce|"
+    r"hivelocity|limestone|sharktech|frantech|buyvm|ponynet|packet|equinix|cogent|hurricane electric|"
+    r"data ?cent|hosting|\bservers?\b|cloud|\bvps\b|colocation", re.I)
+
+
+def _asn_kind(name):
+    if not name:
+        return ""
+    return "cloud" if _CLOUD_ASN_RE.search(name) else "isp"
+
+
+NET_GROUPS = {"asn": "furnizor (ASN)", "block": "bloc de retea (ASN)", "s24": "subnet /24 (IPv6 /48)", "s16": "retea /16 (IPv6 /32)"}
+
+
+def _net_verdict(o):
+    """Concluzie scurta, cu cifrele pe care se bazeaza."""
+    n, sel = o.get("matched_ips", 0), o.get("selection_ips", 0)
+    if not n:
+        return ""
+    single = o.get("single_hit_ips", 0)
+    parts = []
+    if o.get("max_hits") == 1 and sel and single / sel >= 0.5 and n >= 500:
+        parts.append(f"{single:,} din {sel:,} IP-uri ({100 * single // sel}%) au facut o singura cerere".replace(",", "."))
+    cloud = o.get("cloud_ips")
+    if cloud is not None:
+        pc = round(100 * cloud / n)
+        parts.append(f"{100 - pc}% vin de la operatori de internet (rezidential / mobil), {pc}% din cloud / gazduire")
+    if o["group"] in ("asn", "block") and o.get("n_groups", 0) >= 50 and o.get("top10_ips_pct", 100) < 30:
+        parts.append(f"sunt imprastiate pe {o['n_groups']:,} retele".replace(",", ".")
+                     + f", primele 10 acopera doar {str(o['top10_ips_pct']).replace('.', ',')}%"
+                     + " -- tipic unei retele de proxy-uri rezidentiale / botnet: blocarea pe IP sau subnet nu ajuta, "
+                       "blocheaza dupa tiparul cererii (WAF / challenge pe URL-ul tinta, rate limiting)")
+    elif cloud is not None and n >= 50 and cloud / n >= 0.6:
+        parts.append("majoritatea din cloud: se pot bloca sau limita furnizorii de mai jos (ASN)")
+    return "; ".join(parts) + "." if parts else ""
+
+
+@app.get("/api/dataset/{dataset_id}/networks")
+def api_networks(dataset_id: str, gf: str = Query(default=""), group: str = Query(default="asn"),
+                 max_hits: int = Query(default=1), top: int = Query(default=100)):
+    """IP-urile selectiei cu <= max_hits cereri (0 = toate), grupate pe retea.
+    Per grup: IP-uri unice, cereri, tari, URL-ul dominant, interval, CIDR-uri."""
+    if group not in NET_GROUPS:
+        return JSONResponse({"error": "grupare necunoscuta"}, status_code=400)
+    ds, store, m, err = _incident_ctx(dataset_id, gf)
+    if err:
+        return err
+    t = time.time()
+    sel = np.arange(store.n) if m is None else np.flatnonzero(m)
+    nip = len(store.v_ip)
+    per_ip = np.bincount(store.ip[sel], minlength=nip) if sel.size else np.zeros(nip, np.int64)
+    seen = np.flatnonzero(per_ip)
+    max_hits = max(0, int(max_hits))
+    want = seen if max_hits == 0 else seen[per_ip[seen] <= max_hits]
+    out: Dict[str, Any] = {"group": group, "group_label": NET_GROUPS[group], "max_hits": max_hits,
+           "selection_requests": int(sel.size), "selection_ips": int(seen.size),
+           "single_hit_ips": int(np.count_nonzero(per_ip[seen] == 1)),
+           "matched_ips": int(want.size), "matched_requests": int(per_ip[want].sum()) if want.size else 0,
+           "asn_available": None, "groups": []}
+    if not want.size:
+        out["elapsed_ms"] = int((time.time() - t) * 1000)
+        return JSONResponse(out)
+    # cheia de grup pentru fiecare IP ales (calculata o data pe IP unic)
+    gkey: Dict[str, int] = {}
+    gidx = np.full(nip, -1, np.int64)
+    names: List[str] = []
+    cidrs_of: List[Set[str]] = []
+    for code in want.tolist():
+        ip = store.v_ip[code]
+        if group in ("asn", "block"):
+            name, cidr = _asn_lookup(ip)
+            k = (name or "(furnizor necunoscut)") if group == "asn" else (cidr or "(bloc necunoscut)")
+            c = cidr
+        elif group == "s24":
+            k = c = _net_prefix(ip, 24, 48)
+        else:
+            k = c = _net_prefix(ip, 16, 32)
+        k = k or "(nedeterminat)"
+        g = gkey.get(k)
+        if g is None:
+            g = gkey[k] = len(names)
+            names.append(k)
+            cidrs_of.append(set())
+        if c and len(cidrs_of[g]) < 200:
+            cidrs_of[g].add(c)
+        gidx[code] = g
+    out["asn_available"] = _asn_db is not None
+    ng = len(names)
+    g_ips = np.bincount(gidx[want], minlength=ng)
+    g_req = np.bincount(gidx[want], weights=per_ip[want], minlength=ng).astype(np.int64)
+    rows = sel[gidx[store.ip[sel]] >= 0]
+    rg = gidx[store.ip[rows]]
+    order = np.argsort(-g_ips, kind="stable")[:max(1, min(int(top), 1000))]
+    # URL dominant per grup + interval + 5xx
+    npo = len(store.v_po) + 1
+    key, cnt = np.unique(rg * npo + store.po[rows], return_counts=True)
+    kg = key // npo
+    best: Dict[int, Any] = {}
+    for g_, k_, c_ in zip(kg.tolist(), (key % npo).tolist(), cnt.tolist()):
+        if c_ > best.get(g_, (0, 0))[0]:
+            best[g_] = (c_, k_)
+    tmin = np.full(ng, np.iinfo(np.int64).max, np.int64); np.minimum.at(tmin, rg, store.ts[rows])
+    tmax = np.full(ng, np.iinfo(np.int64).min, np.int64); np.maximum.at(tmax, rg, store.ts[rows])
+    e5 = np.bincount(rg, weights=(store.st[rows] >= 500), minlength=ng).astype(np.int64)
+    ip_cc = getattr(store, "ip_cc", None)
+    for g in order.tolist():
+        members = want[gidx[want] == g]
+        cc: Counter[str] = Counter()
+        if ip_cc is not None:
+            for c in ip_cc[members].tolist():
+                cc[(store.v_cc[c] if c >= 0 else "") or "??"] += 1
+        bc, bp = best.get(g, (0, 0))
+        kind = _asn_kind(names[g]) if group == "asn" else ""
+        out["groups"].append({
+            "key": names[g], "kind": kind, "ips": int(g_ips[g]), "requests": int(g_req[g]),
+            "countries": [{"cc": k, "ips": v} for k, v in cc.most_common(4)], "n_countries": len(cc),
+            "top_path": store.v_po[bp] if bc else "", "top_path_requests": int(bc),
+            "ts_min": int(tmin[g]), "ts_max": int(tmax[g]), "e5": int(e5[g]),
+            "cidrs": sorted(cidrs_of[g])[:200], "sample_ips": [store.v_ip[c] for c in members[:5].tolist()],
+        })
+    out["n_groups"] = ng
+    top10 = np.sort(g_ips)[::-1][:10]
+    out["top10_ips_pct"] = round(100.0 * float(top10.sum()) / max(1, int(want.size)), 1)
+    # cloud vs rezidential pe TOATE IP-urile alese (nu doar pe grupurile afisate)
+    if _asn_db is not None or group in ("asn", "block"):
+        n_cloud = sum(1 for code in want.tolist() if _asn_kind(_asn_lookup(store.v_ip[code])[0]) == "cloud")
+        out["cloud_ips"] = n_cloud
+        out["isp_ips"] = int(want.size) - n_cloud
+    out["verdict"] = _net_verdict(out)
+    out["elapsed_ms"] = int((time.time() - t) * 1000)
+    return JSONResponse(out)
 
 
 @app.get("/api/dataset/{dataset_id}/filter_attacks/requests")

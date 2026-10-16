@@ -29,3 +29,10 @@
 ## Teste
 - tests/test_logscan.py: 40/40 (nou: test_v50_comportament_automat).
 - tests/ui_v50.py (nou): 6/6. ui_smoke 14/14, ui_v46 10/10, ui_xss trece (si pe vederea "Linii originale"), ui_v45 13/15 -- cele 2 esecuri ("alerta din Triaj", "cronologia de securitate") apar identic si pe v49.1.
+
+## v50.0 (completare) -- Atac pe filtre PrestaShop, Retele in IP Explorer
+- Atac pe filtre: recunoaste si filtrele PrestaShop (?q=Fateta-valoare[/Fateta2-valoare], ?order=product.*, selected_filters). q= simplu (cautare) nu conteaza. Pe un log real: 20.748 cereri din 19.849 IP-uri pe /2-acasa, raportate inainte "nu", acum HIGH distribuit.
+- IP Explorer -> "Retele: IP-uri unice grupate": IP-urile cu o singura cerere (sau <= 3 / <= 10 / oricate) grupate pe furnizor (ASN), bloc de retea, /24 (IPv6 /48) sau /16 (IPv6 /32); per grup IP-uri, cereri, tari, URL dominant, 5xx, interval, CIDR-uri (copiere); tip cloud / rezidential; concluzie automata (ex. retea de proxy-uri rezidentiale -> blocarea pe IP nu ajuta). Ruta: /api/dataset/{id}/networks.
+- Baza ASN: geoip/geoip2fast-asn-ipv6.dat.gz (GeoLite2 ASN prin geoip2fast, release LATEST, IPv4 + IPv6), verificata inainte de folosire: pickle fara niciun opcode de apel (GLOBAL/REDUCE/...), doar date. Incarcata doar la prima folosire (~0,8 s, ~190 MB RAM); uploadul si parsarea nu o folosesc.
+- Workplace: conditie noua "Furnizor (ASN)" (este / contine); "Workplace" din Retele deschide exact aceleasi IP-uri (verificat pe 120 de grupuri: 0 diferente).
+- Teste: 42/42 unitare (noi: test_v50_atac_pe_filtre_prestashop, test_v50_retele_ip_unice), ui_v50 7/7, ui_xss trece.

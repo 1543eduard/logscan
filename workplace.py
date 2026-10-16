@@ -42,6 +42,7 @@ FIELDS = {
     "ip_hits":  ("Cereri / IP in selectie", ("range",)),
     "ip_paths": ("Path-uri unice / IP in selectie", ("range",)),
     # v50: comportament automat (boti, scanere, scraping) -- calculate tot pe selectie
+    "asn":      ("Furnizor (ASN)", ("in", "contains")),
     "ip_rpm":   ("Varf cereri / minut / IP", ("range",)),
     "ip_err":   ("% erori 4xx / IP in selectie", ("range",)),
     "ip_uas":   ("User-Agent-uri diferite / IP", ("range",)),
@@ -141,6 +142,8 @@ class Workplace:
         self._hour = None
         self._wd = None
         self._subnet = None
+        self._asn = None
+        self.asn_name_of = None      # setat de app: ip -> numele furnizorului ("" = necunoscut)
 
     # ------------------------------------------------------------ derivate
     def ua_cat_codes(self):
@@ -199,6 +202,15 @@ class Workplace:
                 codes[i] = c
             self._subnet = (codes, len(d))
         return self._subnet
+
+    def asn_names(self):
+        """Numele furnizorului (ASN) pentru fiecare IP unic, calculat o data."""
+        if self._asn is None:
+            fn = self.asn_name_of
+            if fn is None:
+                raise QueryError("baza de furnizori (ASN) nu e disponibila")
+            self._asn = [(fn(v) or "") for v in self.s.v_ip]
+        return self._asn
 
     # ------------------------------------------------------------ LUT text
     def _text_lut(self, field, op, needle):
@@ -278,6 +290,15 @@ class Workplace:
             if op == "cidr":
                 return self._cidr_lut([str(v) for v in vals])[s.ip]
             return any_of(lambda v: self._text_lut("ip", op, v)[s.ip])
+        if field == "asn":
+            names = self.asn_names()
+            if op == "in":
+                want = {"" if str(v).strip() == "__NONE__" else str(v).strip() for v in vals}   # __NONE__ = necunoscut
+                lut = np.fromiter((x in want for x in names), dtype=bool, count=len(names))
+            else:
+                nl = [str(v).strip().lower() for v in vals]
+                lut = np.fromiter((any(t in x.lower() for t in nl) for x in names), dtype=bool, count=len(names))
+            return lut[s.ip]
         if field == "country":
             m = np.zeros(n, bool)
             for v in map(str, vals):

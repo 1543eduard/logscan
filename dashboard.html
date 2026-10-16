@@ -1490,6 +1490,23 @@
   .autoIp:hover { color: var(--accent); }
   .autoIp em { font-style: normal; color: var(--text-dim); }
   .autoNone { color: var(--text-dim); font-size: 12px; margin-top: 8px; }
+  .netCtl { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; font-size: 12.5px; color: var(--text-dim); margin: 4px 0 8px; }
+  .netCtl select { margin-left: 4px; }
+  .netBusy { font-size: 11.5px; }
+  .netVerdict { font-size: 13px; font-weight: 500; margin: 2px 0 8px; line-height: 1.5; }
+  .netTblWrap { max-height: 640px; overflow: auto; }
+  .netTbl .netKey { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .netTbl .mono { font-family: "IBM Plex Mono", Consolas, monospace; font-size: 11.5px; }
+  .netTbl .netPath { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .netTbl .barCol { width: 90px; }
+  .netTbl .hbar { display: block; height: 8px; border-radius: 4px; background: var(--accent); opacity: .8; min-width: 2px; }
+  .netCc { display: inline-flex; align-items: center; margin-right: 8px; white-space: nowrap; font-size: 11.5px; }
+  .netKind { font-size: 10.5px; padding: 1px 7px; border-radius: 9px; white-space: nowrap; }
+  .netKind.cloud { background: rgba(80,120,220,.12); color: #3559b5; }
+  .netKind.isp { background: rgba(60,160,110,.13); color: #23774f; }
+  .netE5 { color: var(--red); font-weight: 600; }
+  .netAct { white-space: nowrap; }
+  .netAct .sfSmallBtn + .sfSmallBtn { margin-left: 4px; }
   .sfIncTitle { font-weight: 600; }
   .sfWhen { color: var(--text-dim); font-size: 12px; margin-left: auto; font-variant-numeric: tabular-nums; }
   .sfSt { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-dim); background: var(--bg3); white-space: nowrap; }
@@ -1790,6 +1807,24 @@
       </div>
 
       <div class="kpis" id="ipovKpis" style="margin-bottom:14px"></div>
+
+      <!-- v50: IP-urile cu putine cereri (rotatie de proxy / botnet), grupate pe retea -->
+      <section class="card netCard" id="netCard" style="margin-bottom:14px">
+        <div class="cardHead"><h2>Rețele: IP-uri unice grupate</h2>
+          <span class="cardHint">când cererile vin de la mii de IP-uri diferite, le grupează pe furnizor (ASN), bloc de rețea sau subnet</span></div>
+        <div class="netCtl">
+          <label>Grupare <select id="netGroup">
+            <option value="asn">furnizor (ASN)</option><option value="block">bloc de rețea</option>
+            <option value="s24">subnet /24 (IPv6 /48)</option><option value="s16">rețea /16 (IPv6 /32)</option></select></label>
+          <label>IP-uri cu <select id="netMax">
+            <option value="1">o singură cerere</option><option value="3">cel mult 3 cereri</option>
+            <option value="10">cel mult 10 cereri</option><option value="0">oricâte cereri</option></select></label>
+          <span class="netBusy" id="netBusy"></span>
+        </div>
+        <div id="netVerdict" class="netVerdict"></div>
+        <div id="netStats" class="sfExec"></div>
+        <div id="netBody"></div>
+      </section>
 
       <div class="card" style="margin-bottom:14px">
         <h2>&#128200; Trafic in interval <span class="count" id="ipovTlGran"></span></h2>
@@ -4579,6 +4614,7 @@ function ipovRender(d) {
 
   ipovRenderTimeline(d);
   ipovRenderRubrics(d);
+  netLoad();
 
   // categorii UA in filtrul de extractie
   const catSel = $('#ipovFUaCat'), cur = catSel.value;
@@ -9476,7 +9512,8 @@ const WK = { guideOpen: (() => { try { return localStorage.getItem('logscan.wk.g
 const WK_OPS = { in: 'este', contains: 'contine', regex: 'regex', prefix: 'incepe cu', suffix: 'se termina cu', exact: 'exact',
                  cidr: 'in subnet', has: 'are', param: 'are parametrul', empty: 'e gol / "-"', range: 'intre' };
 const WK_GROUPS = [
-  ['Sursa', [['ip', 'in', 'IP exact'], ['ip', 'cidr', 'Subnet / CIDR'], ['ip', 'prefix', 'IP incepe cu'], ['country', 'in', 'Tara']]],
+  ['Sursa', [['ip', 'in', 'IP exact'], ['ip', 'cidr', 'Subnet / CIDR'], ['ip', 'prefix', 'IP incepe cu'], ['country', 'in', 'Tara'],
+             ['asn', 'in', 'Furnizor (ASN)'], ['asn', 'contains', 'Furnizor contine']]],
   ['Cerere', [['method', 'in', 'Metoda'], ['path', 'contains', 'URL contine'], ['path', 'regex', 'URL regex'], ['path_only', 'exact', 'URL exact (fara query)'],
               ['path_only', 'prefix', 'URL incepe cu'], ['ext', 'in', 'Extensie fisier'], ['query', 'has', 'Are query string'], ['query', 'param', 'Parametru in query']]],
   ['Raspuns', [['status', 'in', 'Cod / clasa HTTP'], ['size', 'range', 'Marime raspuns (B)']]],
@@ -9832,6 +9869,9 @@ const WK_GUIDE = [
     [['Un singur IP', [C('ip', 'in', ['185.191.171.1'])], 'IP exact = 185.191.171.1'],
      ['Un subnet /24', [C('ip', 'cidr', ['185.191.171.0/24'])], 'Subnet = 185.191.171.0/24'],
      ['Toate IP-urile 66.249.*', [C('ip', 'prefix', ['66.249.'])], 'IP începe cu = 66.249.']]],
+  ['Furnizor (ASN)', 'Rețeaua căreia îi aparține IP-ul (operator de internet sau cloud), din baza GeoLite2 ASN. Grupează mii de IP-uri diferite care vin din aceeași rețea.',
+    [['Tot traficul din Amazon', [C('asn', 'contains', ['amazon'])], 'Furnizor conține amazon'],
+     ['Google, fără crawlerele verificate', [C('asn', 'contains', ['google']), C('crawler', 'in', ['verified'], true)], 'Furnizor conține google + NU Crawler = verificat']]],
   ['Țară', 'Țara IP-ului din GeoIP. „Non-RO” = orice țară determinată în afară de România; „??” = nedeterminată (IP privat sau absent din bază).',
     [['Doar din afara României', [C('country', 'in', ['__NON_RO__'])], 'Țară = non-RO'],
      ['Exclude România și SUA', [C('country', 'in', ['RO', 'US'], true)], 'NU Țară = RO, US']]],
@@ -10964,6 +11004,78 @@ $('#faExport').addEventListener('click', () => {
 const _faShow = showPage;
 showPage = function (page) { _faShow.apply(this, arguments); if (CURRENT_PAGE === 'security') faLoad(); };
 GF_LISTENERS.push(() => { if (CURRENT_PAGE === 'security') faLoad(); else FA.key = null; });
+// ---------- v50: Retele -- IP-uri unice grupate (IP Explorer) ----------
+const NET = { key: null, seq: 0, data: null, shown: 50 };
+async function netLoad(force) {
+  if (!DATASET_ID || !TRIAGE.ready || !$('#netCard')) return;
+  const group = $('#netGroup').value, max = $('#netMax').value;
+  const key = [DATASET_ID, gfJSON(), group, max].join('|');
+  if (!force && key === NET.key && NET.data) return;
+  NET.key = key; NET.shown = 50;
+  const seq = ++NET.seq;
+  $('#netBusy').innerHTML = '<span class="spinner" style="width:11px;height:11px"></span> se calculează' + (group === 'asn' || group === 'block' ? ' (prima dată se încarcă baza de furnizori, ~1 s)' : '') + '...';
+  let r, d;
+  try { r = await fetch(gfUrl(`/api/dataset/${DATASET_ID}/networks?group=${group}&max_hits=${max}&top=500`)); d = await r.json(); }
+  catch (e) { if (seq === NET.seq) { $('#netBusy').textContent = 'Eroare de rețea: ' + e.message; } return; }
+  if (seq !== NET.seq) return;
+  if (!r.ok) { NET.data = null; $('#netBusy').textContent = d.error || ('HTTP ' + r.status); return; }
+  NET.data = d; $('#netBusy').textContent = `calculat în ${fmtN(d.elapsed_ms)} ms`;
+  netRender();
+}
+function netRender() {
+  const d = NET.data; if (!d) return;
+  const n = fmtN;
+  $('#netVerdict').textContent = d.verdict || '';
+  $('#netVerdict').style.display = d.verdict ? '' : 'none';
+  const st = (l, v, attn) => `<span class="sfStat${attn ? ' attn' : ''}">${l} <b>${v}</b></span>`;
+  const maxTxt = { 0: 'oricâte cereri', 1: 'o singură cerere', 3: '≤ 3 cereri', 10: '≤ 10 cereri' }[d.max_hits] || ('≤ ' + d.max_hits);
+  $('#netStats').innerHTML = [
+    st('IP-uri în selecție', n(d.selection_ips)),
+    st('cu o singură cerere', `${n(d.single_hit_ips)} <span class="sfMuted">(${pct(d.single_hit_ips, d.selection_ips)})</span>`, d.selection_ips && d.single_hit_ips / d.selection_ips >= 0.5),
+    d.max_hits === 1 ? '' : st(`IP-uri cu ${maxTxt}`, n(d.matched_ips)), st('cererile lor', n(d.matched_requests)),
+    st('grupuri', n(d.n_groups || 0)), st('primele 10 acoperă', (d.top10_ips_pct != null ? String(d.top10_ips_pct).replace('.', ',') : '-') + ' %'),
+    d.cloud_ips != null ? st('cloud / găzduire', `${n(d.cloud_ips)} <span class="sfMuted">(${pct(d.cloud_ips, d.matched_ips)})</span>`) : '',
+    d.cloud_ips != null ? st('internet casnic / mobil', `${n(d.isp_ips)} <span class="sfMuted">(${pct(d.isp_ips, d.matched_ips)})</span>`) : '',
+  ].join('');
+  const gs = d.groups || [];
+  if (!gs.length) { $('#netBody').innerHTML = '<div class="incNote">Niciun IP care să corespundă în selecția curentă.</div>'; return; }
+  const asn = d.group === 'asn';
+  const head = { asn: 'Furnizor (ASN)', block: 'Bloc de rețea', s24: 'Subnet', s16: 'Rețea' }[d.group];
+  const maxIps = Math.max(1, ...gs.map(g => g.ips));
+  const list = gs.slice(0, NET.shown);
+  $('#netBody').innerHTML = `<div class="netTblWrap"><table class="autoTbl netTbl"><thead><tr><th>${head}</th>${asn ? '<th>Tip</th>' : ''}<th class="num">IP-uri</th><th></th><th class="num">Cereri</th><th>Țări</th><th>URL dominant</th><th class="num">5xx</th><th>Interval</th><th></th></tr></thead><tbody>` +
+    list.map((g, i) => `<tr>
+      <td><div class="netKey${asn ? '' : ' mono'}" title="${tEscAttr(g.key)}">${tEsc(g.key)}</div>${asn && g.cidrs.length ? `<div class="autoD mono">${tEsc(g.cidrs.slice(0, 2).join(', '))}${g.cidrs.length > 2 ? ` +${n(g.cidrs.length - 2)}` : ''}</div>` : ''}</td>
+      ${asn ? `<td>${g.kind === 'cloud' ? '<span class="netKind cloud">cloud</span>' : g.kind === 'isp' ? '<span class="netKind isp">rezidențial</span>' : ''}</td>` : ''}
+      <td class="num">${n(g.ips)}</td><td class="barCol"><span class="hbar" style="width:${Math.max(1, Math.round(100 * g.ips / maxIps))}%"></span></td>
+      <td class="num">${n(g.requests)}</td>
+      <td>${g.countries.map(c => `<span class="netCc" title="${tEscAttr(ccLabel(c.cc))}: ${n(c.ips)} IP">${flagHtml(c.cc)}${tEsc(c.cc)}</span>`).join('')}${g.n_countries > 4 ? `<span class="sfMuted">+${g.n_countries - 4}</span>` : ''}</td>
+      <td class="mono netPath" title="${tEscAttr(g.top_path)}: ${n(g.top_path_requests)} cereri">${tEsc(g.top_path)}</td>
+      <td class="num">${g.e5 ? `<span class="netE5">${n(g.e5)}</span>` : '0'}</td>
+      <td class="autoD">${tEsc(fmtEpoch(g.ts_min))}<br>${tEsc(fmtEpoch(g.ts_max))}</td>
+      <td class="netAct"><button type="button" class="ghost sfSmallBtn" data-net-wk="${i}" title="Deschide in Workplace: aceste blocuri de retea${d.max_hits ? ', doar IP-urile cu ' + maxTxt : ''}">Workplace</button><button type="button" class="ghost sfSmallBtn" data-net-copy="${i}" title="Copiaza blocurile CIDR (pentru reguli de blocare)">CIDR</button></td></tr>`).join('') +
+    '</tbody></table></div>' +
+    (gs.length > NET.shown ? `<button type="button" class="ghost sfSmallBtn" id="netMore">Arată mai multe (${n(NET.shown)} din ${n(gs.length)}${d.n_groups > gs.length ? ' afișabile, ' + n(d.n_groups) + ' în total' : ''})</button>` : '');
+}
+$('#netGroup').addEventListener('change', () => netLoad());
+$('#netMax').addEventListener('change', () => netLoad());
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'netMore') { NET.shown += 100; netRender(); return; }
+  const cp = e.target.closest('[data-net-copy]');
+  if (cp && NET.data) { const g = NET.data.groups[+cp.dataset.netCopy]; await copyToClipboard(g.cidrs.join('\n') + '\n'); toast(`Copiate ${g.cidrs.length} blocuri CIDR (${g.key})`); return; }
+  const wk = e.target.closest('[data-net-wk]');
+  if (!wk || !NET.data) return;
+  const g = NET.data.groups[+wk.dataset.netWk];
+  if (NET.data.group !== 'asn' && !g.cidrs.length) { toast('Grupul nu are blocuri de rețea cunoscute.'); return; }
+  const conds = NET.data.group === 'asn'
+    ? [{ field: 'asn', op: 'in', values: [g.key === '(furnizor necunoscut)' ? '__NONE__' : g.key] }]
+    : [{ field: 'ip', op: 'cidr', values: g.cidrs }];
+  if (NET.data.max_hits) conds.push({ field: 'ip_hits', op: 'range', values: [null, NET.data.max_hits] });
+  if (await wkEnsureMeta()) { WK.conds = conds.map(wkMkCond); WK.period = 'global'; WK.offset = 0; }
+  showPage('workplace'); wkSchedule();
+});
+GF_LISTENERS.push(() => { if (CURRENT_PAGE !== 'ip') NET.key = null; });
+
 // ---------- v50: Activitate automata (boti, scanari, scraping) ----------
 const AUTO = { key: null, seq: 0, data: null };
 async function autoLoad(force) {

@@ -1509,6 +1509,43 @@ def test_v50_atac_pe_filtre_prestashop():
     assert "/2-acasa" in t and "/cauta" not in t
 
 
+@test
+def test_v50_retele_ip_unice():
+    """IP Explorer -> Retele: IP-urile cu <= N cereri grupate pe furnizor (ASN),
+    /24 si /16; cloud vs rezidential; aceleasi cifre ca in Workplace
+    (conditia 'Furnizor (ASN)' / CIDR)."""
+    _need_store()
+    if not os.path.exists(app._ASN_FILE):
+        raise AssertionError("lipseste geoip/geoip2fast-asn-ipv6.dat.gz")
+    ex = [L(f"66.249.{64 + i // 200}.{i % 200 + 1}", "13/Oct/2026:08:%02d:%02d" % (i // 60 % 60, i % 60), "GET", "/2-acasa?q=Marca-X", 200)
+          for i in range(60)]                                         # Google, o cerere / IP
+    ex += [L(f"86.127.{i}.9", "13/Oct/2026:09:00:%02d" % (i % 60), "GET", "/", 503) for i in range(40)]   # Digi, o cerere / IP
+    ex += [L("86.127.200.200", "13/Oct/2026:09:10:%02d" % i, "GET", "/", 200) for i in range(5)]           # Digi, 5 cereri
+    d, path, part, summary, db, dcol, dbc, store = build_dataset(FIXTURE + ex)
+    did = _register(store, dcol)
+    app.DATASETS[did]["summary_cache"] = {"ALL": summary}
+    st, r = call(app.api_networks, dataset_id=did, group="asn", max_hits=1)
+    assert st == 200 and r["asn_available"], r
+    g = {x["key"]: x for x in r["groups"]}
+    assert g["Google LLC"]["ips"] == 60 and g["Google LLC"]["kind"] == "cloud" and g["Google LLC"]["top_path"] == "/2-acasa"
+    assert g["Digi Romania S.A."]["ips"] >= 40 and g["Digi Romania S.A."]["kind"] == "isp" and g["Digi Romania S.A."]["e5"] == 40
+    assert "86.127.200.200" not in sum((x["sample_ips"] for x in r["groups"]), [])
+    st, r0 = call(app.api_networks, dataset_id=did, group="asn", max_hits=0)
+    assert {x["key"]: x for x in r0["groups"]}["Digi Romania S.A."]["requests"] >= 45
+    st, r24 = call(app.api_networks, dataset_id=did, group="s24", max_hits=1)
+    assert {x["key"]: x["ips"] for x in r24["groups"]}["66.249.64.0/24"] == 60
+    st, r16 = call(app.api_networks, dataset_id=did, group="s16", max_hits=1)
+    assert {x["key"]: x["ips"] for x in r16["groups"]}["86.127.0.0/16"] >= 40
+    for grp in (r, r24):
+        for x in grp["groups"]:
+            c = ([{"field": "asn", "op": "in", "values": [x["key"] if x["key"] != "(furnizor necunoscut)" else "__NONE__"]}]
+                 if grp is r else [{"field": "ip", "op": "cidr", "values": x["cidrs"]}])
+            js = _wp(did, c + [{"field": "ip_hits", "op": "range", "values": [None, 1]}])
+            assert (js["total"], js["unique_ips"]) == (x["requests"], x["ips"]), (x["key"], js["total"], x["requests"])
+    st, e = call(app.api_networks, dataset_id=did, group="x")
+    assert st == 400
+
+
 if __name__ == "__main__":
     bad = [r for r in RESULTS if r[1]]
     for name, err in RESULTS:
