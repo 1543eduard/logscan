@@ -48,7 +48,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import unquote
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
 from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse, Response, FileResponse, StreamingResponse
@@ -338,7 +338,7 @@ def wordfence_match_paths(top_paths_counter, path_ips):
 # --------------------------------------------------------------------------
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024 * 1024  # 8 GB decompressed safety cap
 DATASET_TTL_SECONDS = 2 * 3600  # dataset-ul (inclusiv fisierul plain de pe disc) tinut 2h
-DATASETS = {}  # dataset_id -> Dataset dict
+DATASETS: Dict[str, Dict[str, Any]] = {}  # dataset_id -> Dataset dict
 DATASETS_LOCK = threading.Lock()
 
 MAX_IPS_PER_BUCKET = 300_000     # plafon IP-uri unice retinute per path/subnet/pattern
@@ -4659,12 +4659,12 @@ _dns_executor = ThreadPoolExecutor(max_workers=DNS_VERIFY_MAX_WORKERS, thread_na
 # simplu (CRAWLER_VERIFY_CACHE_MAX): odata atins, pur si simplu nu mai
 # adaugam intrari noi (cache-ul ramane util pentru IP-urile deja vazute,
 # fara complexitatea unei politici LRU reale).
-_CRAWLER_VERIFY_CACHE = {}
+_CRAWLER_VERIFY_CACHE: Dict[str, Any] = {}
 _CRAWLER_VERIFY_CACHE_LOCK = threading.Lock()
 
 # dataset_id -> job dict: {total, completed, verified, unverified, not_checked,
 # pending, results: {ip: {...}}}
-_CRAWLER_JOBS = {}
+_CRAWLER_JOBS: Dict[str, Dict[str, Any]] = {}
 _CRAWLER_JOBS_LOCK = threading.Lock()
 
 
@@ -5101,7 +5101,7 @@ def _finalize_triage_index(dataset_id, workdir, shard_paths):
 # job_id imediat dupa ultima bucata, si interogheaza /api/jobs/{job_id}
 # periodic pana la "done".
 # --------------------------------------------------------------------------
-JOBS = {}
+JOBS: Dict[str, Dict[str, Any]] = {}
 JOBS_LOCK = threading.Lock()
 # max_workers=2: ThreadPoolExecutor NU porneste thread-uri la constructie
 # (doar la primul submit()) -- sigur fata de mp.set_start_method("forkserver",
@@ -5111,7 +5111,7 @@ JOBS_LOCK = threading.Lock()
 # thread-ul de executie al unui "def" sincron FastAPI/Starlette deja folosit
 # azi de api_upload -- zero risc nou.
 _INGEST_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingest")
-UPLOADS = {}
+UPLOADS: Dict[str, Dict[str, Any]] = {}
 UPLOADS_LOCK = threading.Lock()
 
 
@@ -5284,9 +5284,9 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
     # analiza nu au nevoie de nicio modificare, ele oricum nu presupun ca
     # fisierul e cronologic -- vezi README, punctul 4).
     workdir = tempfile.mkdtemp(prefix="logscan_ds_")
-    filenames = []
+    filenames: List[str] = []
     domain_guesses = []
-    plain_parts = []
+    plain_parts: List[str] = []
     try:
         for f in files:
             raw_path = os.path.join(workdir, f"src_{len(filenames)}_{f.filename or 'upload.log'}")
@@ -6783,9 +6783,9 @@ def api_ip_detail(dataset_id: str, ip: str = Query(default=""), day: str = Query
 
     total = 0
     bandwidth = 0
-    paths = Counter()
-    status_counter = Counter()
-    methods = Counter()
+    paths: Counter[str] = Counter()
+    status_counter: Counter[Any] = Counter()
+    methods: Counter[str] = Counter()
     first = None
     last = None
     for r in chunk_results:
@@ -6848,8 +6848,8 @@ def api_country_subnets(dataset_id: str, country: str = Query(default=""), day: 
     else:
         chunk_results = _pool_map(_scan_chunk_country_subnets, args, len(chunks))
 
-    subnet_reqs = Counter()
-    subnet_ips = defaultdict(set)
+    subnet_reqs: Counter[str] = Counter()
+    subnet_ips: Dict[str, Set[str]] = defaultdict(set)
     for r in chunk_results:
         subnet_reqs.update(r["subnet_reqs"])
         for k, v in r["subnet_ips"].items():
@@ -7730,7 +7730,7 @@ def api_triage_admin_session(dataset_id: str, ip: str = Query(...),
             # ancora = ultima autentificare din perioada selectata
             mm = store.mask({"ts_from": tf, "ts_to": tt, "ip": ip,
                              "action_types": ["admin_login_success", "admin_login_post"]})
-            cand = np.flatnonzero(mm) if mm is not None else []
+            cand: Any = np.flatnonzero(mm) if mm is not None else []
             if len(cand):
                 ts = int(store.ts[cand].max())
             else:
@@ -8830,7 +8830,7 @@ def api_incidents(dataset_id: str, gf: str = Query(default=""), limit: int = Que
         ip = store.v_ip[ipc]
         t = trail.get(ip) or {}
         sev_names = [store.v_sev[x] for x in store.sev[rows].tolist()]
-        sev_counts = {}
+        sev_counts: Dict[str, int] = {}
         for s in sev_names:
             sev_counts[s] = sev_counts.get(s, 0) + 1
         max_rank = min(triage_columnar.SEVERITY_RANK.get(s, 4) for s in sev_counts)
@@ -8939,7 +8939,7 @@ def api_ip_trail(dataset_id: str, ip: str = Query(...), gf: str = Query(default=
         })
         prev_ts, prev_ua = ts, ua
     t = _trail_by_ip(ds).get(ip) or {}
-    uas = {}
+    uas: Dict[str, int] = {}
     for x in store.ua[rows].tolist():
         u = store.v_ua[x]
         uas[u] = uas.get(u, 0) + 1
@@ -10091,7 +10091,7 @@ def api_brief(dataset_id: str, gf: str = Query(default="")):
     except Exception:
         inc = {"incidents": [], "admin_only": {}}
     summ = _summary_without_fp(dataset_id, (ds.get("summary_cache") or {}).get("ALL") or {}) if _gf_is_empty(f) else {}
-    findings_by_ip = {}
+    findings_by_ip: Dict[str, List[Dict[str, Any]]] = {}
     for x in (summ.get("findings") or []):
         if x.get("ip"):
             findings_by_ip.setdefault(x["ip"], []).append(x)
@@ -10327,7 +10327,7 @@ def api_time_info(dataset_id: str):
     store = _col_store(ds)
     seg = _tz_segments(ds)
     bounds = _time_bounds(ds, store)
-    days = []
+    days: List[str] = []
     if bounds:
         import datetime as _dt
         y, mo, d = _parse_day(epoch_to_wall(seg, bounds[0])["day"])
