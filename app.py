@@ -59,6 +59,11 @@ import triage_columnar
 import workplace
 import blockrules
 np = triage_columnar.np   # None fara numpy -- folosit doar pe calea columnara
+if triage_columnar.NP_ERROR:
+    print("[logscan] ATENTIE: numpy nu se poate incarca -- aplicatia merge pe indexul SQLite, fara Workplace,\n"
+          "          incidente, retele si reguli de blocare (mai lent). Cauza: " + triage_columnar.NP_ERROR + "\n"
+          "          Reinstaleaza dependintele: ./install.sh  (sau: venv/bin/pip install --force-reinstall numpy)",
+          file=sys.stderr, flush=True)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 

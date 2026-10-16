@@ -31,10 +31,12 @@ import pickle
 import threading
 from array import array
 
+NP_ERROR = ""      # motivul real, daca numpy exista dar nu se incarca (afisat la pornire)
 try:
     import numpy as np
-except Exception:  # pragma: no cover - mediu fara numpy => calea SQL
+except Exception as _e:  # pragma: no cover - mediu fara numpy => calea SQL
     np = None  # type: ignore[assignment]
+    NP_ERROR = f"{type(_e).__name__}: {_e}"
 
 # LOGSCAN_NO_COLUMNAR=1 forteaza calea SQL (diagnostic / comparatie).
 AVAILABLE = np is not None and os.environ.get("LOGSCAN_NO_COLUMNAR", "").strip() != "1"

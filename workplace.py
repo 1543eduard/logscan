@@ -17,7 +17,10 @@ import ipaddress
 import re
 import threading
 
-import numpy as np
+# numpy vine prin triage_columnar: un al doilea "import numpy" dupa un import
+# esuat da doar "cannot load module more than once per process" si ascunde
+# cauza reala; fara numpy, Workplace e dezactivat, restul aplicatiei merge.
+from triage_columnar import np
 
 # ---------------------------------------------------------------- catalog
 FIELDS = {

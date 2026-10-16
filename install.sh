@@ -30,6 +30,17 @@ fi
 echo "-> instalez dependintele (requirements.txt)"
 venv/bin/python -m pip install -q --upgrade pip
 venv/bin/python -m pip install -q -r requirements.txt
+# verificare: modulele se incarca efectiv (eroarea reala, nu una generica, mai tarziu)
+if ! venv/bin/python -c "import numpy, fastapi, uvicorn" 2> .install-check.err; then
+    echo
+    echo "ATENTIE: dependintele s-au instalat, dar nu se incarca:"
+    tail -3 .install-check.err
+    echo "Incearca:  venv/bin/python -m pip install --force-reinstall --no-cache-dir -r requirements.txt"
+    echo "Daca persista, trimite mesajul de mai sus (si iesirea lui: uname -m; venv/bin/python -VV)."
+    rm -f .install-check.err
+    exit 1
+fi
+rm -f .install-check.err
 chmod +x bin/logscan
 if [ "$1" = "--link" ]; then
     ln -sf "$APP_DIR/bin/logscan" /usr/local/bin/logscan
