@@ -32,3 +32,9 @@
 ## Teste
 - tests/test_logscan.py: 45/45 (noi: test_v51_geoip_baze_izolate, test_v51_reguli_blocare, test_v51_comparatie_perioade_si_identitate).
 - tests/ui_v51.py (nou): 8/8 pe logul real si pe logul de test.
+
+## v51.1 -- bifele pentru regulile de blocare, gasite usor
+- Coloana de bifat din cele 5 tabele (IP Explorer: Subnet-uri /24 suspecte, Toate subnet-urile /24, IP-uri suspecte; Endpoints: prefixele de path) are titlul "Blocheaza" (inainte era goala).
+- Dupa prima bifa apare jos, pe orice pagina, bara "Bifate pentru blocare: N ... -> Vezi regulile / Goleste".
+- Cardul din Investigations explica unde se bifeaza, cu linkuri directe spre tabele (textul vechi spunea "mai sus/jos", ramas din vremea cand totul era pe o singura pagina).
+- Fix: linkurile de actiune (href="#") nu mai produc o eroare JS in handlerul de ancore.

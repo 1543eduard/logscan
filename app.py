@@ -5259,7 +5259,7 @@ def index():
     return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
-LOGSCAN_VERSION = "51.0"
+LOGSCAN_VERSION = "51.1"
 _STATIC_FONTS = os.path.join(APP_DIR, "static", "fonts")
 
 

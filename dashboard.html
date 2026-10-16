@@ -1697,6 +1697,16 @@
   .tblx.noSearch input[type=search] { display: none; }
   th.tblxSort { cursor: pointer; user-select: none; white-space: nowrap; } th.tblxSort:hover { color: var(--accent); }
   .tblxAr { color: var(--accent); margin-left: 3px; font-size: 10px; }
+
+  /* v51.1: bifele pentru reguli de blocare */
+  th.selCol { font-size: 10.5px; font-weight: 600; color: var(--accent); width: 62px; white-space: nowrap; }
+  .ruleGenHelp p { margin: 0 0 8px; font-size: 13.5px; } .ruleGenHelp ul { margin: 0 0 10px 18px; padding: 0; font-size: 13.5px; line-height: 1.7; }
+  .ruleGenHelp a { color: var(--accent); }
+  #selTray { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 10px;
+    background: #10232A; color: #fff; border-radius: 999px; padding: 8px 10px 8px 18px; box-shadow: var(--shadow-pop); font-size: 13px; }
+  #selTray[hidden] { display: none; }
+  #selTray button { font-size: 12.5px; padding: 5px 12px; border-radius: 999px; }
+  #selTray .ghost { background: transparent; color: #cfe; border-color: rgba(255,255,255,.3); }
 </style>
 </head>
 <body>
@@ -1704,7 +1714,7 @@
 <aside id="sidebar">
   <div class="sbBrand">
     <svg class="sbMark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8"/><path d="M8 21V11M13 21v-6M18 21v-9M23 21v-4"/></svg>
-    <div><div class="sbName">logscan</div><div class="sbVer">v51.0 &middot; jurnale de acces cPanel</div></div>
+    <div><div class="sbName">logscan</div><div class="sbVer">v51.1 &middot; jurnale de acces cPanel</div></div>
   </div>
   <div id="sbFile" class="sbFile" style="display:none">
     <div class="sbFileLbl">Fișier analizat</div>
@@ -2376,11 +2386,11 @@
     <div class="grid2">
       <div class="card" id="subnetCard">
         <h2>Subnet-uri /24 cu activitate suspecta <span class="count" id="cSubnet"></span><button class="copyBtn" data-copy="#tblSubnet">&#10697; copy</button></h2>
-        <div class="note" style="margin-top:-6px;margin-bottom:8px">Bifeaza un subnet ca sa-l adaugi in generatorul de reguli de blocare de mai jos.</div>
+        <div class="note" style="margin-top:-6px;margin-bottom:8px">Bifeaza un subnet ca sa-l adaugi in regulile de blocare (coloana „Blochează”; regulile apar în Investigations → Reguli de blocare).</div>
         <input type="text" class="tblSearch" data-target="#tblSubnet" placeholder="cauta subnet...">
         <div class="tblToolbar"><div class="rowLimitWrap">Arata: <select class="rowLimitSel" data-for="#tblSubnet"><option value="50" selected>50</option><option value="200">200</option><option value="1000">1000</option><option value="all">Tot</option></select></div></div>
         <div class="scroll-y"><table id="tblSubnet"><thead><tr>
-          <th class="selCol"></th><th class="sortable" data-sort-idx="0">Subnet</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Cereri</th><th>Motive</th>
+          <th class="selCol" title="Bifează ca să adaugi în regulile de blocare (Investigations → Reguli de blocare)">Blochează</th><th class="sortable" data-sort-idx="0">Subnet</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Cereri</th><th>Motive</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card">
@@ -2389,7 +2399,7 @@
         <input type="text" class="tblSearch" data-target="#tblAllSubnet" placeholder="cauta subnet...">
         <div class="tblToolbar"><div class="rowLimitWrap">Arata: <select class="rowLimitSel" data-for="#tblAllSubnet"><option value="50" selected>50</option><option value="200">200</option><option value="1000">1000</option><option value="all">Tot</option></select></div></div>
         <div class="scroll-y"><table id="tblAllSubnet"><thead><tr>
-          <th class="selCol"></th><th class="sortable" data-sort-idx="0">Subnet</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Cereri</th>
+          <th class="selCol" title="Bifează ca să adaugi în regulile de blocare (Investigations → Reguli de blocare)">Blochează</th><th class="sortable" data-sort-idx="0">Subnet</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Cereri</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
     </div>
@@ -2425,12 +2435,12 @@
       <div class="card" id="pathPrefixCard">
         <h2>Prefixe de continut (categorii/produse) <span class="count" id="cPathPrefix"></span><button class="copyBtn" data-copy="#tblPathPrefix">&#10697; copy</button></h2>
         <div class="note" style="margin-top:-6px;margin-bottom:8px" id="cPathPrefixNote"></div>
-        <div class="note" style="margin-top:-2px;margin-bottom:8px">Bifeaza un prefix ca sa-l adaugi in generatorul de reguli de blocare de mai jos. Click pe path pentru cererile brute cu acel prefix; &#128269; pentru explorarea ierarhica (drill-down pe sub-segmente).</div>
+        <div class="note" style="margin-top:-2px;margin-bottom:8px">Bifeaza un prefix ca sa-l adaugi in regulile de blocare (coloana „Blochează”; regulile apar în Investigations → Reguli de blocare). Click pe path pentru cererile brute cu acel prefix; &#128269; pentru explorarea ierarhica (drill-down pe sub-segmente).</div>
         <div class="note" style="margin-top:-2px;margin-bottom:8px">Coloanele /*/*, /*/*/* si /* x4+ arata cate din cererile de sub acest prefix au CEL PUTIN 2, 3, respectiv 4 segmente de path (ex: /categorii-produse/pavaj/gri = 3 segmente sub /categorii-produse). Diferenta fata de "Cereri" = cate cereri se opresc exact la acel nivel, fara sa mearga mai adanc. 100% automat -- functioneaza pe orice structura de site, fara presupuneri (pe site-uri "flat", fara "/" in URL, coloanele astea raman 0 -- e corect, nu lipsa date).</div>
         <input type="text" class="tblSearch" data-target="#tblPathPrefix" placeholder="cauta prefix...">
         <div class="tblToolbar"><div class="rowLimitWrap">Arata: <select class="rowLimitSel" data-for="#tblPathPrefix"><option value="50" selected>50</option><option value="200">200</option><option value="1000">1000</option><option value="all">Tot</option></select></div></div>
         <div class="scroll-y"><table id="tblPathPrefix"><thead><tr>
-          <th class="selCol"></th><th class="sortable" data-sort-idx="0">Prefix path</th><th class="num sortable" data-sort-idx="1">Cereri</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Trafic</th><th class="num">/*/*</th><th class="num">/*/*/*</th><th class="num">/* x4+</th><th>Explorare</th>
+          <th class="selCol" title="Bifează ca să adaugi în regulile de blocare (Investigations → Reguli de blocare)">Blochează</th><th class="sortable" data-sort-idx="0">Prefix path</th><th class="num sortable" data-sort-idx="1">Cereri</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Trafic</th><th class="num">/*/*</th><th class="num">/*/*/*</th><th class="num">/* x4+</th><th>Explorare</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
       <div class="card" id="pathPrefixStaticCard">
@@ -2440,7 +2450,7 @@
         <input type="text" class="tblSearch" data-target="#tblPathPrefixStatic" placeholder="cauta prefix...">
         <div class="tblToolbar"><div class="rowLimitWrap">Arata: <select class="rowLimitSel" data-for="#tblPathPrefixStatic"><option value="50" selected>50</option><option value="200">200</option><option value="1000">1000</option><option value="all">Tot</option></select></div></div>
         <div class="scroll-y"><table id="tblPathPrefixStatic"><thead><tr>
-          <th class="selCol"></th><th class="sortable" data-sort-idx="0">Prefix path</th><th class="num sortable" data-sort-idx="1">Cereri</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Trafic</th><th class="num">/*/*</th><th class="num">/*/*/*</th><th class="num">/* x4+</th><th>Explorare</th>
+          <th class="selCol" title="Bifează ca să adaugi în regulile de blocare (Investigations → Reguli de blocare)">Blochează</th><th class="sortable" data-sort-idx="0">Prefix path</th><th class="num sortable" data-sort-idx="1">Cereri</th><th class="num sortable" data-sort-idx="2">IP unice</th><th class="num sortable" data-sort-idx="3">Trafic</th><th class="num">/*/*</th><th class="num">/*/*/*</th><th class="num">/* x4+</th><th>Explorare</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
     </div>
@@ -2492,8 +2502,16 @@
     </div>
 
     <div class="card" style="margin-bottom:14px" id="ruleGenCard">
-      <h2>&#128683; Reguli de blocare (generate din selectiile de mai sus/jos)</h2>
-      <div id="ruleGenEmpty" class="empty">Bifeaza subnet-uri, IP-uri sau path-uri mai sus (sau in tabelele de mai jos) ca sa generezi reguli.</div>
+      <h2>&#128683; Reguli de blocare din elementele bifate</h2>
+      <div id="ruleGenEmpty" class="ruleGenHelp">
+        <p>Nimic bifat încă. Căsuțele <b>Blochează</b> sunt în prima coloană a acestor tabele -- bifează ce vrei să blochezi, apoi revino aici (sau apasă bara de jos care apare după prima bifă):</p>
+        <ul>
+          <li><a href="#" data-rg-go="ip|#subnetCard">IP Explorer → Subnet-uri /24 suspecte</a> și <b>Toate subnet-urile /24 cu trafic</b></li>
+          <li><a href="#" data-rg-go="ip|#tblSusp">IP Explorer → IP-uri suspecte</a></li>
+          <li><a href="#" data-rg-go="endpoints|#pathPrefixCard">Endpoints &amp; URLs → Prefixe de path</a> (pentru path-uri)</li>
+        </ul>
+        <p class="note">Mai rapid: butonul <b>Regulă de blocare</b> de lângă fiecare concluzie (Overview), incident, categorie automată, rețea, IP din panoul lateral sau rezultat din Workplace generează direct regula potrivită (Cloudflare / CSF / .htaccess) pentru exact acel trafic.</p>
+      </div>
       <div id="ruleGenBody" style="display:none">
         <div class="note" style="margin-top:0">Selectate: <span id="ruleChips" class="selectedChips" style="display:inline-flex"></span></div>
         <div class="ruleBlock">
@@ -2697,11 +2715,11 @@
       </div>
       <div class="card">
         <h2>IP-uri suspecte <span class="count" id="cSusp"></span><button class="copyBtn" data-copy="#tblSusp">&#10697; copy</button></h2>
-        <div class="note" style="margin-top:-6px;margin-bottom:8px">Semnal agregat/mai slab decat un finding concret -- bifeaza un IP ca sa-l adaugi in generatorul de reguli de blocare.</div>
+        <div class="note" style="margin-top:-6px;margin-bottom:8px">Semnal agregat/mai slab decat un finding concret -- bifeaza un IP ca sa-l adaugi in regulile de blocare (coloana „Blochează”; regulile apar în Investigations → Reguli de blocare).</div>
         <input type="text" class="tblSearch" data-target="#tblSusp" placeholder="cauta IP sau motiv...">
         <div class="tblToolbar"><div class="rowLimitWrap">Arata: <select class="rowLimitSel" data-for="#tblSusp"><option value="50" selected>50</option><option value="200">200</option><option value="1000">1000</option><option value="all">Tot</option></select></div></div>
         <div class="scroll-y"><table id="tblSusp"><thead><tr>
-          <th class="selCol"></th><th class="sortable" data-sort-idx="0">IP</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">Cereri</th><th class="sortable" data-sort-idx="3">Risc</th><th>Motive</th>
+          <th class="selCol" title="Bifează ca să adaugi în regulile de blocare (Investigations → Reguli de blocare)">Blochează</th><th class="sortable" data-sort-idx="0">IP</th><th class="sortable" data-sort-idx="1">Tara</th><th class="num sortable" data-sort-idx="2">Cereri</th><th class="sortable" data-sort-idx="3">Risc</th><th>Motive</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
     </div>
@@ -2870,6 +2888,7 @@
 </div>
 
 
+<div id="selTray" hidden role="status"><span id="selTrayTxt"></span><button type="button" class="primary" id="selTrayGo">Vezi regulile</button><button type="button" class="ghost" id="selTrayClr">Golește</button></div>
 <div id="ruleOverlay" role="dialog" aria-modal="true" aria-labelledby="rlTitle">
   <div id="ruleBox">
     <div class="rlHead"><div><h3 id="rlTitle">Regulă de blocare</h3><div class="rlSub" id="rlSub"></div></div>
@@ -3070,8 +3089,9 @@ function showPage(page, force) {
 // comuta automat pe tab-ul lui, apoi deruleaza.
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[href^="#"]');
-  if (!a) return;
-  const target = document.querySelector(a.getAttribute('href'));
+  if (!a || a.getAttribute('href').length < 2) return;     // href="#" = link de actiune, nu ancora
+  let target = null;
+  try { target = document.querySelector(a.getAttribute('href')); } catch (err) { return; }
   if (!target || !$('#dash').contains(target)) return;
   let node = target;
   while (node && node.parentElement !== $('#dash')) node = node.parentElement;
@@ -3940,7 +3960,7 @@ function renderSummary(s) {
   const _contentPrefixes = _allPathPrefixes.filter(r => !r.is_static_prefix);
   const _staticPrefixes = _allPathPrefixes.filter(r => r.is_static_prefix);
   renderTableEnh('#tblPathPrefix', '#cPathPrefix', _contentPrefixes, _pathPrefixRowFn, 'path', null, 'path', r => r.path);
-  $('#cPathPrefixNote').textContent = 'Grupat pe primul segment de path (nu pe URL exact) -- prinde cataloage mari unde fiecare pagina are URL unic. Prag: minim 20 cereri pe prefix. Coloana Trafic arata bandwidth-ul agregat pe categorie -- util pentru "cine consuma cel mai mult trafic" la un nivel pe care poti actiona (nu 1000 de URL-uri aproape-identice). Doar prefixe de CONTINUT (nu static/infrastructura, vezi cardul separat). Bifeaza un prefix ca sa-l adaugi in generatorul de reguli de blocare. Badge-ul portocaliu "atac real" = acest prefix se suprapune cu un finding sau un pattern de abuz parametri CONCRET (nu doar volum mare) -- click pe el sare la tabelul sursa.';
+  $('#cPathPrefixNote').textContent = 'Grupat pe primul segment de path (nu pe URL exact) -- prinde cataloage mari unde fiecare pagina are URL unic. Prag: minim 20 cereri pe prefix. Coloana Trafic arata bandwidth-ul agregat pe categorie -- util pentru "cine consuma cel mai mult trafic" la un nivel pe care poti actiona (nu 1000 de URL-uri aproape-identice). Doar prefixe de CONTINUT (nu static/infrastructura, vezi cardul separat). Bifeaza un prefix ca sa-l adaugi in regulile de blocare (coloana „Blochează”, regulile în Investigations). Badge-ul portocaliu "atac real" = acest prefix se suprapune cu un finding sau un pattern de abuz parametri CONCRET (nu doar volum mare) -- click pe el sare la tabelul sursa.';
 
   renderTableEnh('#tblPathPrefixStatic', '#cPathPrefixStatic', _staticPrefixes, _pathPrefixRowFn, 'path', null, 'path', r => r.path);
   $('#cPathPrefixStaticNote').textContent = 'Acelasi criteriu de grupare (prefix = primul segment de path) si acelasi prag (minim 20 cereri), dar aici doar prefixele unde cel putin 70% din cereri merg catre path-uri clasificate statice (JS/CSS/imagini/fonturi/favicon) sau echivalent -- vezi is_static_prefix.';
@@ -3972,7 +3992,7 @@ function renderSummary(s) {
     `<td class="num">${fmtNum(r.requests)}</td>`
   ], 'subnet', null, 'subnet', r => r.subnet);
   $('#cAllSubnetNote').textContent = 'Lista completa (nu doar cele marcate suspicious mai sus) -- prag: minim '
-    + fmtNum(s.all_subnets_min_requests || 20) + ' cereri si minim ' + fmtNum(s.all_subnets_min_ips || 3) + ' IP-uri unice pe /24. Bifeaza un subnet ca sa-l adaugi in generatorul de reguli de blocare.';
+    + fmtNum(s.all_subnets_min_requests || 20) + ' cereri si minim ' + fmtNum(s.all_subnets_min_ips || 3) + ' IP-uri unice pe /24. Bifeaza un subnet ca sa-l adaugi in regulile de blocare (coloana „Blochează”, regulile în Investigations).';
 
   renderTableEnh('#tblScan', '#cScan', Object.entries(s.scan_hits).map(([k,v]) => ({sig:k, count:v})), r => [
     `<td class="mono clickable" data-sig="${esc(r.sig)}">${esc(r.sig)}</td>`, `<td class="num">${fmtNum(r.count)}</td>`
@@ -11843,7 +11863,7 @@ function tblxEnhance(t) {
   const bar = document.createElement('div');
   bar.className = 'tblx';
   bar.innerHTML = `<input type="search" placeholder="Caută în tabel…" aria-label="Caută în tabel"><span class="tblxN"></span>
-    <select aria-label="Copiază o coloană"><option value="">Copiază coloana…</option>${heads.map((h, i) => tblxText(h) ? `<option value="${i}">${tEsc(tblxText(h))}</option>` : '').join('')}</select>
+    <select aria-label="Copiază o coloană"><option value="">Copiază coloana…</option>${heads.map((h, i) => tblxText(h) && !h.classList.contains('selCol') ? `<option value="${i}">${tEsc(tblxText(h))}</option>` : '').join('')}</select>
     <button type="button" class="ghost" title="Descarcă rândurile afișate ca CSV">CSV</button>`;
   const host = (t.parentElement && t.parentElement.children.length === 1 && getComputedStyle(t.parentElement).overflowX !== 'visible') ? t.parentElement : t;
   host.parentElement.insertBefore(bar, host);
@@ -11883,6 +11903,34 @@ function tblxEnhance(t) {
 const tblxScan = debounce(() => { document.querySelectorAll('main table').forEach(tblxEnhance); }, 250);
 new MutationObserver(tblxScan).observe(document.querySelector('main'), { childList: true, subtree: true });
 new ResizeObserver(() => { document.documentElement.style.setProperty('--tbH', $('#topbar').offsetHeight + 'px'); }).observe($('#topbar'));
+
+// ======================================================================
+// v51.1 -- bifele "Blocheaza" (IP Explorer / Endpoints) -> generatorul din
+// Investigations: bara de jos arata cate sunt bifate, de pe orice pagina.
+// ======================================================================
+function selTrayRender() {
+  const n = SELECTED.ip.size + SELECTED.subnet.size + SELECTED.path.size;
+  $('#selTray').hidden = !n || CURRENT_PAGE === 'investigations';
+  const parts = [];
+  if (SELECTED.ip.size) parts.push(SELECTED.ip.size + (SELECTED.ip.size === 1 ? ' IP' : ' IP-uri'));
+  if (SELECTED.subnet.size) parts.push(SELECTED.subnet.size + (SELECTED.subnet.size === 1 ? ' subnet' : ' subnet-uri'));
+  if (SELECTED.path.size) parts.push(SELECTED.path.size + (SELECTED.path.size === 1 ? ' path' : ' path-uri'));
+  $('#selTrayTxt').textContent = 'Bifate pentru blocare: ' + parts.join(', ');
+}
+const _v511RuleGen = updateRuleGen;
+updateRuleGen = function () { const r = _v511RuleGen.apply(this, arguments); selTrayRender(); return r; };
+document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-rg-go]');
+  if (g) { e.preventDefault(); const [pg, sel] = g.dataset.rgGo.split('|'); gotoCard(pg, sel); return; }
+  if (e.target.closest('#selTrayGo')) { gotoCard('investigations', '#ruleGenCard'); return; }
+  if (e.target.closest('#selTrayClr')) {
+    SELECTED.ip.clear(); SELECTED.subnet.clear(); SELECTED.path.clear();
+    document.querySelectorAll('input.ruleCheck:checked').forEach(c => { c.checked = false; });
+    updateRuleGen();
+  }
+});
+const _v511Show = showPage;
+showPage = function () { const r = _v511Show.apply(this, arguments); selTrayRender(); return r; };
 </script>
 </body>
 </html>
