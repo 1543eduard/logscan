@@ -4,7 +4,7 @@ Analiză pentru jurnalele de acces Apache / LiteSpeed (Raw Access din cPanel): t
 
 ## Pornire rapidă
 
-Cerințe: Python 3 (testat pe 3.11) și git.
+Cerințe: Python 3.11 sau mai nou (cerut de numpy 2.x) și git. `install.sh` îl găsește singur dacă există (`python3.11`, `python3.12`...); pe AlmaLinux / CentOS 8, unde `python3` e 3.6, instalează-l cu `dnf install python3.11`.
 
 ```bash
 git clone git@github.com:1543eduard/logscan.git
@@ -45,7 +45,7 @@ Exemplu, pe laptop: `LOGSCAN_HOST=127.0.0.1 LOGSCAN_MAXTIME=0 bin/logscan`
 ```bat
 git clone git@github.com:1543eduard/logscan.git
 cd logscan
-python -m venv venv
+py -3.11 -m venv venv
 venv\Scripts\pip install -r requirements.txt
 venv\Scripts\python app.py --host 127.0.0.1 --port 8080
 ```

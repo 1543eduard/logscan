@@ -38,3 +38,9 @@
 - Dupa prima bifa apare jos, pe orice pagina, bara "Bifate pentru blocare: N ... -> Vezi regulile / Goleste".
 - Cardul din Investigations explica unde se bifeaza, cu linkuri directe spre tabele (textul vechi spunea "mai sus/jos", ramas din vremea cand totul era pe o singura pagina).
 - Fix: linkurile de actiune (href="#") nu mai produc o eroare JS in handlerul de ancore.
+
+## Instalare / actualizare pe alte masini
+- bin/logscan: lansatorul (port aleator 21000-21099, oprire dupa 2h), acum in repo si portabil (gaseste singur folderul aplicatiei; setari prin LOGSCAN_HOST / LOGSCAN_PORT / LOGSCAN_PORT_MIN / LOGSCAN_PORT_MAX / LOGSCAN_MAXTIME). Pe serverul principal /usr/local/bin/logscan e un link spre el, deci "git pull" actualizeaza si comanda.
+- install.sh: creeaza venv/ cu cel mai nou Python >= 3.11 gasit (numpy 2.x il cere; pe AlmaLinux 8 "python3" e 3.6) si instaleaza dependintele; --link pune comanda "logscan" in /usr/local/bin.
+- README.md: instalare, actualizare, setari, Windows, teste.
+- Verificat pe o clona curata de pe GitHub: install.sh -> Python 3.12, 45/45 teste, aplicatia porneste si analizeaza logul real.
