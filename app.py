@@ -48,7 +48,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import unquote
 
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
 from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse, Response, FileResponse, StreamingResponse
@@ -57,6 +57,7 @@ import uvicorn
 import triage_engine
 import triage_columnar
 import workplace
+import blockrules
 np = triage_columnar.np   # None fara numpy -- folosit doar pe calea columnara
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +88,20 @@ _geoip6 = None
 _geoip6_tried = False
 
 
+def _geoip_isolated(tag):
+    """Clasa GeoIP2Fast dintr-o copie SEPARATA a modulului. geoip2fast tine
+    baza incarcata in variabile globale de modul: un al doilea GeoIP2Fast(...)
+    (IPv6, furnizori ASN) in acelasi modul o suprascria pe prima, iar ~3% din
+    IP-urile IPv4 primeau apoi alta tara. Fiecare baza are deci modulul ei."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(f"geoip2fast_{tag}", os.path.join(_GEOIP_DIR, "geoip2fast.py"))
+    if spec is None or spec.loader is None:
+        raise ImportError("geoip2fast.py lipseste")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.GeoIP2Fast
+
+
 def geoip_status():
     """Ce poate rezolva GeoIP pe acest server -- afisat in UI (spec §3: nu
     inventam tari; explicam de ce un IP nu are tara). IPv6 e raportat
@@ -110,7 +125,7 @@ def _lookup6(ip):
         _geoip6_tried = True
         if _geoip and os.path.exists(_GEOIP6_FILE):
             try:
-                _geoip6 = GeoIP2Fast(geoip2fast_data_file=_GEOIP6_FILE, verbose=False)
+                _geoip6 = _geoip_isolated("ipv6")(geoip2fast_data_file=_GEOIP6_FILE, verbose=False)
             except (Exception, SystemExit):
                 # versiune de geoip2fast.py incompatibila cu fisierul IPv6 ->
                 # IPv6 ramane "tara nedeterminata" (explicat in UI), nimic nu cade
@@ -5244,7 +5259,7 @@ def index():
     return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
-LOGSCAN_VERSION = "50.0"
+LOGSCAN_VERSION = "51.0"
 _STATIC_FONTS = os.path.join(APP_DIR, "static", "fonts")
 
 
@@ -10607,10 +10622,9 @@ def _asn_lookup(ip):
     if not _asn_tried:
         with _ASN_LOCK:
             if not _asn_tried:
-                cls = globals().get("GeoIP2Fast")    # lipseste daca importul geoip2fast a esuat
-                if cls is not None and os.path.exists(_ASN_FILE):
+                if _geoip is not None and os.path.exists(_ASN_FILE):
                     try:
-                        _asn_db = cls(geoip2fast_data_file=_ASN_FILE, verbose=False)
+                        _asn_db = _geoip_isolated("asn")(geoip2fast_data_file=_ASN_FILE, verbose=False)
                     except (Exception, SystemExit) as e:
                         print(f"[asn] baza ASN indisponibila: {e}", flush=True)
                         _asn_db = None
@@ -10834,6 +10848,240 @@ def api_filter_attack_requests(dataset_id: str, gf: str = Query(default=""), tar
     return JSONResponse({"mode": "unique", "total_requests": int(cnt.sum()), "total": int(u.size),
                          "unique_ips": int(u.size), "items": items, "offset": offset, "limit": limit})
 
+
+
+# --------------------------------------------------------------------------
+# v51 -- REGULI DE BLOCARE gata de copiat (Cloudflare / CSF / .htaccess),
+# pentru orice selectie: incident (atac pe filtre), categorie automata,
+# interogare Workplace, retea sau un IP. Strategia (IP / subnet / tipar /
+# limitare de rata) se alege in blockrules.build() din forma traficului.
+# --------------------------------------------------------------------------
+def _fa_pattern(store: Any, rows: Any) -> List[Dict[str, Any]]:
+    """Tiparul atacului pe filtre: URL-urile tinta principale + parametrii."""
+    V = _fa_vocab(store)
+    tg, cnt = np.unique(V["target"][store.fp[rows]], return_counts=True)
+    tot = max(1, int(cnt.sum()))
+    exact: List[str] = []
+    prefix: List[str] = []
+    for t, c in sorted(zip(tg.tolist(), cnt.tolist()), key=lambda x: -x[1]):
+        if t < 0 or c < 0.05 * tot or len(exact) + len(prefix) >= 8:
+            continue
+        name = V["targets"][t]
+        if name.endswith("/*fatete*"):
+            prefix.append(name[:-len("/*fatete*")] + "/")
+        else:
+            exact.append(name)
+    params: Counter[str] = Counter()
+    for f in np.unique(store.fp[rows]).tolist():
+        for k in V["keys"].get(int(f), []):
+            if not k.startswith("("):
+                params[re.split(r"[=\[]", k, 1)[0]] += 1
+    pat: List[Dict[str, Any]] = []
+    if exact:
+        pat.append({"field": "path_only", "op": "exact", "values": exact})
+    elif prefix:
+        pat.append({"field": "path_only", "op": "prefix", "values": prefix})
+    names = [k for k, _ in params.most_common(6) if k]
+    if names:
+        pat.append({"field": "query", "op": "param", "values": names})
+    return pat
+
+
+@app.post("/api/dataset/{dataset_id}/block_rules")
+def api_block_rules(dataset_id: str, body: dict = Body(...)):
+    """body: gf (selectia globala) + una dintre: kind="filter_attack", q
+    (interogare Workplace), conds (conditii Workplace aplicate peste gf),
+    ip. pattern = conditii explicite pentru regula pe tipar (optional)."""
+    ds, store, m, err = _incident_ctx(dataset_id, str(body.get("gf") or ""))
+    if err:
+        return err
+    t = time.time()
+    label = str(body.get("label") or "selectie")[:120]
+    kind = str(body.get("kind") or "")
+    q = body.get("q") if isinstance(body.get("q"), dict) else None
+    conds = list(body.get("conds") or [])
+    if body.get("ip"):
+        conds = [{"field": "ip", "op": "in", "values": [str(body["ip"])]}]
+    pattern = body.get("pattern") or None
+    sel = np.arange(store.n) if m is None else np.flatnonzero(m)
+    try:
+        if q is not None or conds:
+            _, wp, werr = _workplace_for(dataset_id)
+            if werr:
+                return werr
+            qq = q if q is not None else {"conds": conds}
+            wm, _, _ = wp.build(qq, _workplace_ctx(dataset_id))
+            if q is not None:
+                sel = np.arange(store.n) if wm is None else np.flatnonzero(wm)   # Workplace are propria perioada
+                conds = list(q.get("conds") or [])
+            elif wm is not None:
+                sel = sel[wm[sel]]
+    except (workplace.QueryError, TypeError, ValueError) as e:
+        return JSONResponse({"error": f"Filtru invalid: {e}"}, status_code=400)
+    if kind == "filter_attack":
+        V = _fa_vocab(store)
+        sel = sel[V["flag"][store.fp[sel]]] if sel.size else sel
+        if not pattern and sel.size:
+            pattern = _fa_pattern(store, sel)
+    nip = len(store.v_ip)
+    per_ip = np.bincount(store.ip[sel], minlength=nip) if sel.size else np.zeros(nip, np.int64)
+    seen = np.flatnonzero(per_ip)
+    seen = seen[np.argsort(-per_ip[seen], kind="stable")]
+    ips = [(store.v_ip[c], int(per_ip[c])) for c in seen.tolist()]
+    info: Dict[str, Any] = {"requests": int(sel.size), "ips": ips}
+    if len(ips) > blockrules.IP_MAX:
+        sub: Dict[str, List[int]] = {}
+        for ip, n in ips:
+            k = _net_prefix(ip, 24, 48)
+            if k:
+                a = sub.setdefault(k, [0, 0]); a[0] += 1; a[1] += n
+        info["subnets"] = sorted(((k, v[0], v[1]) for k, v in sub.items()), key=lambda x: -x[2])
+    asn_cidrs = None
+    want_asn = any((c or {}).get("field") == "asn" for c in (pattern or conds))
+    if want_asn or len(ips) <= 30000:
+        cl, cidrs = 0, set()
+        for ip, _ in ips[:30000]:
+            name, cidr = _asn_lookup(ip)
+            cl += _asn_kind(name) == "cloud"
+            if want_asn and cidr:
+                cidrs.add(cidr)
+        info["cloud_ips"] = cl
+        asn_cidrs = sorted(cidrs) if want_asn else None
+    out = blockrules.build(label, info, conds, pattern=pattern, asn_cidrs=asn_cidrs)
+    out["top_ips"] = [{"ip": ip, "n": n} for ip, n in ips[:10]]
+    out["pattern"] = pattern or [c for c in conds if not c.get("off")]
+    out["elapsed_ms"] = int((time.time() - t) * 1000)
+    return JSONResponse(out)
+
+
+@app.get("/api/dataset/{dataset_id}/ip_identity")
+def api_ip_identity(dataset_id: str, ip: str = Query(...), gf: str = Query(default="")):
+    """v51: identitatea unui IP pentru panoul lateral -- furnizor, bloc, tip
+    (cloud / rezidential), crawler verificat, vecinii din aceeasi retea /24 si
+    de la acelasi furnizor, in selectie."""
+    ds, store, m, err = _incident_ctx(dataset_id, gf)
+    if err:
+        return err
+    _, wp, werr = _workplace_for(dataset_id)
+    if werr:
+        return werr
+    name, cidr = _asn_lookup(ip)
+    out: Dict[str, Any] = {"ip": ip, "asn": name, "cidr": cidr, "kind": _asn_kind(name),
+                           "subnet": _net_prefix(ip, 24, 64)}
+    out["crawler"] = ("verified" if ip in _verified_crawler_ips(dataset_id)
+                      else "fake" if ip in _fake_crawler_ips(dataset_id) else "")
+    code = store.d_ip.get(ip)
+    if code is None:
+        return JSONResponse(out)
+    sel = np.arange(store.n) if m is None else np.flatnonzero(m)
+    per_ip = np.bincount(store.ip[sel], minlength=len(store.v_ip)) if sel.size else np.zeros(len(store.v_ip), np.int64)
+    seen = per_ip > 0
+    sc, _ = wp.subnet_codes()
+    same = seen & (sc == sc[code])
+    out["subnet_ips"], out["subnet_requests"] = int(np.count_nonzero(same)), int(per_ip[same].sum())
+    if name:
+        names = wp.asn_names()
+        same_a = seen & np.fromiter((x == name for x in names), dtype=bool, count=len(names))
+        out["asn_ips"], out["asn_requests"] = int(np.count_nonzero(same_a)), int(per_ip[same_a].sum())
+    return JSONResponse(out)
+
+
+@app.get("/api/dataset/{dataset_id}/reopen")
+def api_reopen(dataset_id: str):
+    """v51: datele de la upload, pentru un link copiat (?d=<id>) -- fara
+    reincarcare, cat timp analiza e inca in memorie."""
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Analiza nu mai e in memorie (aplicatia a fost repornita sau a expirat)."},
+                            status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL")
+    if summary is None:
+        return JSONResponse({"error": "Sumarul nu e disponibil."}, status_code=404)
+    return JSONResponse({"dataset_id": dataset_id, "filename": ds.get("filename"),
+                         "source_files": ds.get("source_files"), "days": ds.get("days_available"),
+                         "summary": _summary_without_fp(dataset_id, summary)})
+
+
+DIFF_DIMS = {"ip": "IP-uri", "country": "Tari", "path": "URL-uri", "asn": "Furnizori"}
+
+
+@app.get("/api/dataset/{dataset_id}/diff")
+def api_diff(dataset_id: str, a_from: int = Query(...), a_to: int = Query(...),
+             b_from: int = Query(...), b_to: int = Query(...), gf: str = Query(default=""),
+             top: int = Query(default=12)):
+    """v51: comparatie intre doua perioade A (referinta) si B, pe aceleasi
+    filtre de continut: ce e NOU in B, ce a CRESCUT (rata pe ora, ca perioadele
+    pot avea lungimi diferite) si ce a DISPARUT."""
+    ds, store, _m, err = _incident_ctx(dataset_id, "")
+    if err:
+        return err
+    f, err = _gf_checked(gf_raw=gf)
+    if err:
+        return err
+    f = {k: v for k, v in (f or {}).items() if k not in ("ts_from", "ts_to")}
+    t = time.time()
+    base = store.mask(f) if f else None
+    ts = store.ts
+    ma = (ts >= a_from) & (ts <= a_to)
+    mb = (ts >= b_from) & (ts <= b_to)
+    if base is not None:
+        ma &= base
+        mb &= base
+    da, db = max(1, a_to - a_from + 1), max(1, b_to - b_from + 1)
+    top = max(3, min(int(top), 50))
+
+    def totals(m, dur):
+        n = int(np.count_nonzero(m))
+        st = store.st[m]
+        return {"requests": n, "per_min": round(n * 60.0 / dur, 2), "duration_sec": int(dur),
+                "unique_ips": int(np.unique(store.ip[m]).size) if n else 0,
+                "pct_4xx": round(100.0 * np.count_nonzero((st >= 400) & (st < 500)) / n, 1) if n else 0.0,
+                "pct_5xx": round(100.0 * np.count_nonzero(st >= 500) / n, 1) if n else 0.0}
+
+    out: Dict[str, Any] = {"a": totals(ma, da), "b": totals(mb, db), "dims": {}}
+    ia, ib = store.ip[ma], store.ip[mb]
+    if ib.size:
+        seen_a = np.zeros(len(store.v_ip), bool)
+        seen_a[ia] = True
+        new_rows = ~seen_a[ib]
+        out["b"]["new_ip_requests"] = int(np.count_nonzero(new_rows))
+        out["b"]["new_ips"] = int(np.unique(ib[new_rows]).size)
+    scale = db / da          # cat ar fi facut A in durata lui B
+    dims: Dict[str, Tuple[Any, List[str]]] = {"ip": (store.ip, store.v_ip), "country": (store.cc, store.v_cc),
+                                              "path": (store.po, store.v_po)}
+    _, wp, werr = _workplace_for(dataset_id)
+    if werr is None and os.path.exists(_ASN_FILE):
+        try:
+            names = wp.asn_names()
+            d_asn: Dict[str, int] = {}
+            ip_asn = np.fromiter((d_asn.setdefault(x or "(necunoscut)", len(d_asn)) for x in names), dtype=np.int32, count=len(names))
+            dims["asn"] = (ip_asn[store.ip], list(d_asn))
+        except Exception:
+            pass
+    for key, (col, labels) in dims.items():
+        K = len(labels)
+        ca = np.bincount(col[ma], minlength=K).astype(np.float64)
+        cb = np.bincount(col[mb], minlength=K).astype(np.float64)
+        exp_b = ca * scale
+        lab = lambda i: labels[i] if labels[i] != "" else ("??" if key == "country" else "(gol)")
+        row = lambda i: {"key": lab(i), "a": int(ca[i]), "b": int(cb[i]), "a_scaled": round(float(exp_b[i]), 1)}
+        min_n = max(3.0, 0.001 * float(cb.sum()))
+        nw = np.flatnonzero((ca == 0) & (cb >= min_n))
+        nw = nw[np.argsort(-cb[nw], kind="stable")]
+        grow = np.flatnonzero((ca > 0) & (cb >= 2 * exp_b) & (cb - exp_b >= min_n))
+        grow = grow[np.argsort(-(cb[grow] - exp_b[grow]), kind="stable")]
+        gone = np.flatnonzero((cb == 0) & (exp_b >= min_n))
+        gone = gone[np.argsort(-ca[gone], kind="stable")]
+        drop = np.flatnonzero((cb > 0) & (cb * 2 <= exp_b) & (exp_b - cb >= min_n))
+        drop = drop[np.argsort(-(exp_b[drop] - cb[drop]), kind="stable")]
+        out["dims"][key] = {"label": DIFF_DIMS[key],
+                            "new": [row(i) for i in nw[:top].tolist()], "n_new": int(nw.size),
+                            "new_requests": int(cb[nw].sum()),
+                            "grew": [row(i) for i in grow[:top].tolist()], "n_grew": int(grow.size),
+                            "gone": [row(i) for i in gone[:top].tolist()], "n_gone": int(gone.size),
+                            "dropped": [row(i) for i in drop[:top].tolist()], "n_dropped": int(drop.size)}
+    out["elapsed_ms"] = int((time.time() - t) * 1000)
+    return JSONResponse(out)
 
 if __name__ == "__main__":
     main()

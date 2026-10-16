@@ -762,7 +762,7 @@
     border-left: 1px solid var(--accent); box-shadow: -14px 0 34px -14px rgba(0,0,0,.75); display: flex; flex-direction: column;
     transform: translateX(105%); transition: transform .18s ease; }
   #xpDrawer.open { transform: translateX(0); }
-  @media (min-width: 1280px) { body.xpOpen main { margin-right: min(560px, 40vw); } body.xpOpen #selectionPanel.dock { right: 0; } }
+  @media (min-width: 1800px) { body.xpOpen main { margin-right: min(560px, 32vw); } body.xpOpen #selectionPanel.dock { right: 0; } }
   .xpHead { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px 12px; border-bottom: 1px solid var(--border); }
   .xpNav { display: flex; gap: 4px; } .xpNav button { padding: 2px 8px; }
   .xpTitle { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
@@ -1183,7 +1183,7 @@
 
   /* ---------- straturi flotante: sertar, meniu, paleta, fereastra ---------- */
   #xpDrawer { top: 0; bottom: 0; background: #fff; border-left: 1px solid var(--border); box-shadow: var(--shadow-pop); z-index: 80; }
-  @media (min-width: 1280px) { body.xpOpen #appMain { margin-right: min(560px, 40vw); } body.xpOpen main { margin-right: 0; } }
+  @media (min-width: 1800px) { body.xpOpen #appMain { margin-right: min(560px, 32vw); } body.xpOpen main { margin-right: 0; } }
   .xpScope { background: var(--accent-soft); color: #33545A; border-bottom-color: var(--accent-line); }
   .xpCmpBanner { background: #EEF0FB; }
   .xpEvRow:hover, .xpEvRow:focus { background: #F6F9FA; }
@@ -1595,6 +1595,108 @@
   .admSep { margin: 6px 0 6px -18px; padding: 5px 10px 5px 18px; font-size: 12px; font-weight: 600; color: var(--red); background: var(--red-soft); border-left: 3px solid var(--red); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
   .admSep.ro { color: var(--green); background: var(--green-soft); border-left-color: var(--green); }
   @media (max-width: 900px) { .admEv { grid-template-columns: 1fr; gap: 2px; } .admTabs { margin-left: 0; } }
+
+  /* v51: reguli de blocare */
+  #ruleOverlay { position: fixed; inset: 0; background: rgba(15,23,32,.38); z-index: 120; display: none; align-items: flex-start; justify-content: center; padding: 5vh 16px; overflow-y: auto; }
+  #ruleOverlay.open { display: flex; }
+  #ruleBox { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); width: min(860px, 100%); }
+  .rlHead { display: flex; align-items: flex-start; gap: 12px; padding: 16px 20px 10px; border-bottom: 1px solid var(--border); }
+  .rlHead h3 { margin: 0; font-size: 16px; } .rlHead .rlSub { font-size: 12.5px; color: var(--text-dim); margin-top: 2px; }
+  .rlHead .closeBtn { margin-left: auto; }
+  .rlBody { padding: 14px 20px 18px; }
+  .rlWhy { font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; margin-bottom: 10px; }
+  .rlStats { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .rlStats span { font-size: 12px; background: var(--bg3); color: var(--text-dim); border-radius: 999px; padding: 2px 9px; } .rlStats b { color: var(--text); }
+  .rlWarn { font-size: 12.5px; color: #A0530A; background: var(--orange-soft); border-radius: var(--radius-sm); padding: 7px 10px; margin-bottom: 12px; }
+  .rlOpt { border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 10px; background: #fff; }
+  .rlOpt.rec { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
+  .rlOptHead { display: flex; align-items: center; gap: 8px; padding: 9px 12px 4px; flex-wrap: wrap; }
+  .rlOptHead strong { font-size: 13.5px; }
+  .rlTgt { font-size: 10.5px; font-weight: 700; letter-spacing: .02em; border-radius: 4px; padding: 1px 6px; background: var(--bg3); color: var(--text-dim); }
+  .rlRec { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 8px; background: var(--accent); color: var(--accent-ink, #fff); }
+  .rlOptHead .ghost { margin-left: auto; }
+  .rlMeta { font-size: 12px; color: var(--text-dim); padding: 0 12px 6px; } .rlMeta b { color: var(--text); font-weight: 600; }
+  .rlCode { margin: 0 12px; font-family: var(--mono); font-size: 12px; background: #FBFCFD; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+  .rlNote { font-size: 12px; color: var(--text-dim); padding: 6px 12px 10px; line-height: 1.45; }
+  .rlMore > summary { cursor: pointer; font-size: 13px; color: var(--accent); margin: 4px 0 10px; }
+  .rlIps { font-size: 12px; color: var(--text-dim); margin-top: 4px; } .rlIps code { font-size: 11.5px; }
+  button.ruleBtn { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; }
+  .rbIco { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+  /* v51: Ce s-a intamplat */
+  .ovFind .cardHead { margin-bottom: 10px; }
+  .ovFList { display: flex; flex-direction: column; gap: 8px; }
+  .ovF { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid var(--text-faint); border-radius: var(--radius-sm); background: #fff; }
+  .ovF.sev-CRITICAL { border-left-color: var(--red); background: linear-gradient(90deg, var(--red-soft), #fff 40%); }
+  .ovF.sev-HIGH { border-left-color: var(--orange); background: linear-gradient(90deg, var(--orange-soft), #fff 40%); }
+  .ovF.sev-MEDIUM { border-left-color: #C9A227; }
+  .ovF.sev-OK { border-left-color: var(--green); background: linear-gradient(90deg, var(--green-soft), #fff 40%); }
+  .ovFTag { display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; padding: 2px 7px; border-radius: 4px; background: var(--bg3); color: var(--text-dim); }
+  .sev-CRITICAL .ovFTag { background: var(--red); color: #fff; } .sev-HIGH .ovFTag { background: var(--orange); color: #fff; }
+  .sev-MEDIUM .ovFTag { background: #F6EBC4; color: #7A5D00; } .sev-OK .ovFTag { background: var(--green); color: #fff; }
+  .ovFT { font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .ovFX { font-size: 13.5px; line-height: 1.5; color: #26323F; max-width: 110ch; }
+  .ovFX a { color: var(--accent); }
+  .ovFA { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  @media (max-width: 700px) { .ovF { grid-template-columns: 1fr; gap: 4px; } }
+
+  /* v51: identitatea IP-ului in panoul lateral */
+  .xpIdent { margin-bottom: 12px; }
+  .xpVerd { font-size: 13.5px; line-height: 1.45; padding: 9px 12px; border-radius: var(--radius-sm); border-left: 4px solid var(--text-faint); background: var(--bg3); margin-bottom: 10px; font-weight: 500; }
+  .xpVerd.bad { border-left-color: var(--red); background: var(--red-soft); } .xpVerd.warn { border-left-color: var(--orange); background: var(--orange-soft); }
+  .xpVerd.ok { border-left-color: var(--green); background: var(--green-soft); }
+  .xpIdGrid { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 5px 10px; font-size: 12.5px; }
+  .xpIdGrid .k { color: var(--text-dim); } .xpIdGrid code { font-size: 12px; }
+  .xpIdUa { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+  .xpIdK { font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; margin-left: 4px; background: var(--bg3); color: var(--text-dim); white-space: nowrap; }
+  .xpIdK.cloud { background: #E7EEFB; color: #2F5BB7; } .xpIdK.isp { background: var(--bg3); }
+  .xpIdK.ok { background: var(--green-soft); color: var(--green); } .xpIdK.bad { background: var(--red-soft); color: var(--red); }
+  .xpIdLnk { margin-left: 6px; color: var(--accent); font-size: 12px; }
+  .xpIdAct { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  button.xpRuleBtn { font-weight: 600; color: var(--accent); }
+
+  /* v51: bara compacta fixa */
+  #ctxBar { flex: 1 1 100%; display: flex; align-items: center; gap: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); min-width: 0; }
+  #ctxBar[hidden] { display: none; }
+  #ctxHist { flex: 0 0 min(380px, 34%); height: 34px; cursor: crosshair; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  #ctxChips { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; max-height: 52px; overflow: auto; }
+  #ctxChips .filterChip { font-size: 11.5px; padding: 1px 5px 1px 9px; }
+  .ctxNone { font-size: 12px; color: var(--text-faint); }
+  .ctxBtns { display: flex; gap: 6px; flex: 0 0 auto; }
+  #topbar .ctxBtns button { font-size: 12px; padding: 5px 9px; }
+  @media (max-width: 900px) { #ctxBar { flex-wrap: wrap; } #ctxHist { flex-basis: 100%; } }
+  .dzLink { color: #A0530A; font-weight: 600; }
+  /* v51: comparatie de perioade */
+  .cmpForm { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin-bottom: 12px; }
+  .cmpSide { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-dim); }
+  .cmpSide input { font-size: 12.5px; padding: 4px 6px; }
+  .cmpLbl { flex-basis: 100%; font-weight: 600; color: var(--text); font-size: 13px; }
+  .cmpTag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 0 6px; color: #fff; background: #6B7785; margin-right: 4px; }
+  .cmpTag.b { background: var(--accent); }
+  .cmpPresets { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .cmpPresets #cmpRun { margin-left: auto; }
+  .cmpTot { width: 100%; margin-bottom: 12px; font-size: 13px; }
+  .cmpTot td.up { color: var(--red); font-weight: 600; } .cmpTot td.down { color: var(--green); }
+  .cmpDim { margin-bottom: 12px; } .cmpDim h4 { margin: 0 0 6px; font-size: 13.5px; }
+  .cmpCols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .cmpH { font-size: 12px; font-weight: 700; padding: 3px 0; border-bottom: 2px solid var(--border); margin-bottom: 4px; }
+  .cmpH span { font-weight: 400; color: var(--text-dim); } .cmpH.new { border-color: var(--red); } .cmpH.up { border-color: var(--orange); } .cmpH.gone { border-color: var(--text-faint); }
+  .cmpDiff { width: 100%; font-size: 12px; } .cmpDiff td { padding: 2px 4px; border: 0; vertical-align: top; } .cmpDiff td:first-child { word-break: break-all; } .cmpDiff td.num { white-space: nowrap; }
+  .cmpMono { font-family: var(--mono); font-size: 11.5px; }
+  .cmpNone { font-size: 12px; color: var(--text-faint); padding: 2px 4px; }
+  .cmpFoot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  @media (max-width: 760px) { .cmpForm, .cmpCols { grid-template-columns: 1fr; } }
+
+  /* v51: tabele uniforme */
+  .tblx { display: flex; align-items: center; gap: 8px; margin: 2px 0 6px; flex-wrap: wrap; }
+  .tblx input[type=search] { width: 200px; font-size: 12.5px; padding: 4px 8px; }
+  .tblx select, .tblx button { font-size: 12px; padding: 4px 8px; }
+  .tblxN { font-size: 12px; color: var(--text-faint); margin-right: auto; }
+  table.tblxT thead th { position: sticky; top: var(--tbH, 0px); z-index: 3; background: #fff; }
+  table.tblxT.tblxIn thead th { top: 0; }
+  .tblx.noSearch input[type=search] { display: none; }
+  th.tblxSort { cursor: pointer; user-select: none; white-space: nowrap; } th.tblxSort:hover { color: var(--accent); }
+  .tblxAr { color: var(--accent); margin-left: 3px; font-size: 10px; }
 </style>
 </head>
 <body>
@@ -1602,7 +1704,7 @@
 <aside id="sidebar">
   <div class="sbBrand">
     <svg class="sbMark" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="8"/><path d="M8 21V11M13 21v-6M18 21v-9M23 21v-4"/></svg>
-    <div><div class="sbName">logscan</div><div class="sbVer">v50.0 &middot; jurnale de acces cPanel</div></div>
+    <div><div class="sbName">logscan</div><div class="sbVer">v51.0 &middot; jurnale de acces cPanel</div></div>
   </div>
   <div id="sbFile" class="sbFile" style="display:none">
     <div class="sbFileLbl">Fișier analizat</div>
@@ -1647,6 +1749,15 @@
     <option value="bursts">Bursturi</option>
   </select>
   <button id="expCsv" class="ghost" style="display:none">Export CSV</button>
+  <div id="ctxBar" hidden aria-label="Perioada și filtrele active">
+    <canvas id="ctxHist" aria-label="Traficul pe tot logul -- trage ca să alegi perioada"></canvas>
+    <div id="ctxChips"></div>
+    <div class="ctxBtns">
+      <button type="button" class="ghost" id="ctxCmp" title="Compară două perioade: ce e nou, ce a crescut, ce a dispărut">Compară perioade</button>
+      <button type="button" class="ghost" id="ctxLink" title="Copiază un link care deschide exact acest ecran (pagina, perioada, filtrele)">Copiază link</button>
+      <button type="button" class="ghost" id="ctxReset" title="Tot logul, fără filtre">Resetează tot</button>
+    </div>
+  </div>
 </header>
 
 <div id="topbarError"></div>
@@ -1684,6 +1795,8 @@
           </div>
           <div class="gfRibBtns">
             <button class="ghost" id="gfBackBtn" title="Revino la selecția anterioară (fără reimport)" disabled>&#8630; Înapoi</button>
+            <button class="ghost" onclick="cmpOpen()" title="Compară două perioade: ce e nou, ce a crescut, ce a dispărut">Compară perioade</button>
+            <button class="ghost" onclick="linkCopy()" title="Copiază un link care deschide exact acest ecran (pagina, perioada, filtrele)">Copiază link</button>
             <button class="ghost" id="triageResetBtn" title="Tot logul, fără filtre">Resetează</button>
           </div>
         </div>
@@ -1753,6 +1866,7 @@
     </div>
   </div>
   <div id="overviewPage" class="modPage" style="display:none">
+    <section class="card ovFind" id="ovFind" aria-live="polite"></section>
     <section class="ovLead card" id="ovLead"><div class="ovLeadText" id="ovLeadText">Se pregătește situația...</div><div class="ovKpis" id="ovKpis"></div></section>
     <div class="ovGrid">
       <section class="card ovTrend"><div class="cardHead"><h2>Trafic în timp</h2><span class="cardHint">pe clase de cod HTTP &middot; trage peste grafic ca să alegi perioada</span></div><div class="xpChartWrap ovChart"><canvas id="ovTrendChart"></canvas></div><div class="note" id="ovTrendNote"></div></section>
@@ -2755,6 +2869,14 @@
 </main>
 </div>
 
+
+<div id="ruleOverlay" role="dialog" aria-modal="true" aria-labelledby="rlTitle">
+  <div id="ruleBox">
+    <div class="rlHead"><div><h3 id="rlTitle">Regulă de blocare</h3><div class="rlSub" id="rlSub"></div></div>
+      <button class="closeBtn" id="rlClose" aria-label="Închide">&times;</button></div>
+    <div class="rlBody" id="rlBody"></div>
+  </div>
+</div>
 <div id="modalOverlay">
   <div id="modal">
     <div class="modal-head">
@@ -9794,6 +9916,7 @@ function wkRenderResults() {
       <button class="ghost" id="wkCopyAll" ${r.total ? '' : 'disabled'} title="Copiaza in clipboard liniile brute ale TUTUROR cererilor potrivite (max 20.000)">Copiaza toate ${r.total > 20000 ? '(primele 20.000)' : '(' + fmtNum(r.total) + ')'}</button>
       <button class="ghost" id="wkDownload" ${r.total ? '' : 'disabled'}>Descarca .log (${fmtNum(r.total)})</button>
       <button class="ghost" id="wkCopyJson" title="Copiaza conditiile ca JSON (le poti lipi intr-un preset sau un ticket)">JSON</button>
+      ${r.total ? ruleBtn(() => ({ q: wkQuery(), label: 'rezultatul din Workplace' }), 'Regulă de blocare', 'wkRuleBtn') : ''}
     </div>`;
   let body;
   if (!r.rows.length) body = '<div class="wkEmpty" style="margin-top:10px">Nicio cerere nu indeplineste toate conditiile. Uita-te la coloana "dupa ea" din stanga ca sa vezi care conditie elimina tot.</div>';
@@ -10590,6 +10713,7 @@ function sfIncHtml(x) {
       <button type="button" class="ghost sfSmallBtn" data-sf-act="evidence">Vezi dovezile</button>
       <button type="button" class="ghost sfSmallBtn" data-sf-act="trail">Traseu complet al IP-ului</button>
       <button type="button" class="ghost sfSmallBtn" data-sf-act="raw">Consulta logurile brute</button>
+      ${/^[0-9a-f:.]+$/i.test(x.ip || '') ? ruleBtn({ ip: x.ip, label: x.ip }) : ''}
     </div><!--/tools--></div></article>`;
 }
 function sfScrollTo(el) { if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120); }
@@ -11053,7 +11177,7 @@ function netRender() {
       <td class="mono netPath" title="${tEscAttr(g.top_path)}: ${n(g.top_path_requests)} cereri">${tEsc(g.top_path)}</td>
       <td class="num">${g.e5 ? `<span class="netE5">${n(g.e5)}</span>` : '0'}</td>
       <td class="autoD">${tEsc(fmtEpoch(g.ts_min))}<br>${tEsc(fmtEpoch(g.ts_max))}</td>
-      <td class="netAct"><button type="button" class="ghost sfSmallBtn" data-net-wk="${i}" title="Deschide in Workplace: aceste blocuri de retea${d.max_hits ? ', doar IP-urile cu ' + maxTxt : ''}">Workplace</button><button type="button" class="ghost sfSmallBtn" data-net-copy="${i}" title="Copiaza blocurile CIDR (pentru reguli de blocare)">CIDR</button></td></tr>`).join('') +
+      <td class="netAct"><button type="button" class="ghost sfSmallBtn" data-net-wk="${i}" title="Deschide in Workplace: aceste blocuri de retea${d.max_hits ? ', doar IP-urile cu ' + maxTxt : ''}">Workplace</button><button type="button" class="ghost sfSmallBtn" data-net-copy="${i}" title="Copiaza blocurile CIDR (pentru reguli de blocare)">CIDR</button>${ruleBtn(netRuleSpec(d, g), 'Regulă')}</td></tr>`).join('') +
     '</tbody></table></div>' +
     (gs.length > NET.shown ? `<button type="button" class="ghost sfSmallBtn" id="netMore">Arată mai multe (${n(NET.shown)} din ${n(gs.length)}${d.n_groups > gs.length ? ' afișabile, ' + n(d.n_groups) + ' în total' : ''})</button>` : '');
 }
@@ -11075,6 +11199,12 @@ document.addEventListener('click', async (e) => {
   showPage('workplace'); wkSchedule();
 });
 GF_LISTENERS.push(() => { if (CURRENT_PAGE !== 'ip') NET.key = null; });
+function netRuleSpec(d, g) {
+  const conds = d.group === 'asn' ? [{ field: 'asn', op: 'in', values: [g.key === '(furnizor necunoscut)' ? '__NONE__' : g.key] }]
+    : [{ field: 'ip', op: 'cidr', values: g.cidrs }];
+  if (d.max_hits) conds.push({ field: 'ip_hits', op: 'range', values: [null, d.max_hits] });
+  return { conds, label: g.key };
+}
 
 // ---------- v50: Activitate automata (boti, scanari, scraping) ----------
 const AUTO = { key: null, seq: 0, data: null };
@@ -11102,7 +11232,7 @@ function autoRender() {
     hit.map(c => `<tr><td><div class="autoT">${tEsc(c.title)}</div><div class="autoD">${tEsc(c.desc)}</div></td>
       <td class="num">${fmtN(c.requests)}<div class="autoD">${GF.overview ? pct(c.requests, tot) : ''}</div></td><td class="num">${fmtN(c.ips)}</td>
       <td>${c.top.map(t => `<span class="autoIp" data-auto-ip="${tEscAttr(t.ip)}" title="Deschide IP-ul in panoul de explorare">${flagHtml(t.country)}${tEsc(t.ip)} <em>${fmtN(t.n)}</em></span>`).join('')}</td>
-      <td><button type="button" class="ghost sfSmallBtn" data-auto-wk="${tEscAttr(c.key)}" title="Deschide in Workplace cu aceleasi conditii">Workplace</button></td></tr>`).join('') + '</tbody></table>'
+      <td><button type="button" class="ghost sfSmallBtn" data-auto-wk="${tEscAttr(c.key)}" title="Deschide in Workplace cu aceleasi conditii">Workplace</button>${ruleBtn({ conds: c.conds, label: c.title }, 'Regulă')}</td></tr>`).join('') + '</tbody></table>'
     : '<div class="incNote">Nicio activitate automata detectata in perioada selectata.</div>') +
     (none.length ? `<div class="autoNone">Fără activitate: ${tEsc(none.map(c => c.title).join(' · '))}.</div>` : '');
 }
@@ -11123,7 +11253,7 @@ const _faSfIncHtml = sfIncHtml;
 sfIncHtml = function (x) {
   if (x.kind !== 'filter_attack') return _faSfIncHtml(x);
   const h = _faSfIncHtml(Object.assign({}, x, { signals: {} }));
-  return h.replace(/<div class="sfIncTools">[\s\S]*?<!--\/tools-->/, `<div class="sfIncTools"><button type="button" class="ghost sfSmallBtn" data-fa-goto>Vezi atacul pe filtre (IP-uri, cereri, tinte)</button></div><!--/tools-->`);
+  return h.replace(/<div class="sfIncTools">[\s\S]*?<!--\/tools-->/, `<div class="sfIncTools"><button type="button" class="ghost sfSmallBtn" data-fa-goto>Vezi atacul pe filtre (IP-uri, cereri, tinte)</button>${ruleBtn({ kind: 'filter_attack', label: 'atac pe filtre' })}</div><!--/tools-->`);
 };
 const _faRelated = sfRelated;
 sfRelated = function (x) { return x.kind === 'filter_attack' ? [] : _faRelated(x); };
@@ -11134,6 +11264,625 @@ sfRender = function () {
   const e = SF.data && SF.data.exec; if (!e) return;
   $('#sfExec').insertAdjacentHTML('beforeend', `<span class="sfStat${e.filter_attack ? ' attn' : ''}">Atac pe filtre <b>${e.filter_attack ? 'DA' : 'nu'}</b>${e.filter_requests ? ` <span class="sfMuted">(${fmtN(e.filter_requests)} cereri / ${fmtN(e.filter_unique_ips)} IP-uri unice)</span>` : ''}</span>`);
 };
+
+// ======================================================================
+// v51 -- REGULI DE BLOCARE gata de copiat, din orice loc: incident, categorie
+// automata, Workplace, retea, IP. Serverul (/block_rules) alege strategia
+// (IP / subnet / tipar / limitare de rata) din forma traficului.
+// ruleBtn(spec) -> butonul; spec: { label, kind?, q?, conds?, ip?, pattern?, gf? }
+// ======================================================================
+const RULES = { specs: [], seq: 0 };
+function ruleBtn(spec, text, cls) {
+  const id = RULES.specs.push(spec) - 1;
+  if (RULES.specs.length > 4000) RULES.specs.splice(0, 2000, ...new Array(2000).fill(null));
+  return `<button type="button" class="ghost ruleBtn ${cls || 'sfSmallBtn'}" data-rule="${id}" title="Generează regula de blocare (Cloudflare / CSF / .htaccess) pentru exact acest trafic"><svg class="rbIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>${tEsc(text || 'Regulă de blocare')}</button>`;
+}
+function rulesClose() { $('#ruleOverlay').classList.remove('open'); RULES.seq++; }
+async function rulesOpen(spec) {
+  if (!DATASET_ID) return;
+  const seq = ++RULES.seq;
+  $('#rlTitle').textContent = 'Regulă de blocare -- ' + (spec.label || 'selecție');
+  $('#rlSub').textContent = spec.q ? 'pentru rezultatul din Workplace' : 'în selecția: ' + gfDescribe();
+  $('#rlBody').innerHTML = xpBusy('Se analizează traficul și se alege regula potrivită...');
+  $('#ruleOverlay').classList.add('open');
+  const body = Object.assign({ gf: spec.q ? '' : gfJSON() }, spec);
+  let d;
+  try {
+    const r = await fetch(`/api/dataset/${DATASET_ID}/block_rules`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  } catch (e) { if (seq === RULES.seq) $('#rlBody').innerHTML = xpErr('Nu am putut genera regula: ' + e.message); return; }
+  if (seq !== RULES.seq) return;
+  RULES.cur = d;
+  const opt = (o, i) => `<div class="rlOpt${o.recommended ? ' rec' : ''}">
+      <div class="rlOptHead"><span class="rlTgt">${tEsc(o.target)}</span><strong>${tEsc(o.title)}</strong>${o.recommended ? '<span class="rlRec">Recomandat</span>' : ''}
+        <button type="button" class="ghost sfSmallBtn" data-rl-copy="${i}">Copiază</button></div>
+      <div class="rlMeta">Unde: <b>${tEsc(o.where)}</b> &middot; Acțiune: <b>${tEsc(o.action)}</b></div>
+      <pre class="rlCode">${tEsc(o.text)}</pre>
+      <div class="rlNote">${tEsc(o.note)}</div></div>`;
+  const opts = d.options || [];
+  const rec = opts.map((o, i) => [o, i]).filter(([o]) => o.recommended);
+  const rest = opts.map((o, i) => [o, i]).filter(([o]) => !o.recommended);
+  const pctSingle = d.ips ? Math.round(100 * d.single_hit_ips / d.ips) : 0;
+  $('#rlBody').innerHTML = `<div class="rlWhy">${tEsc(d.why)}</div>
+    <div class="rlStats"><span><b>${fmtN(d.requests)}</b> cereri</span><span><b>${fmtN(d.ips)}</b> IP-uri</span>
+      <span><b>${pctSingle}%</b> cu o singură cerere</span>${d.ips ? `<span><b>${fmtN(d.cloud_ips)}</b> din cloud / hosting</span>` : ''}</div>` +
+    ((d.unmapped || []).length ? `<div class="rlWarn">Nu se pot exprima într-o regulă de firewall: ${tEsc(d.unmapped.join(', '))}. Regula de pe tipar e deci mai largă decât selecția -- de aceea e propusă și lista de IP-uri / subrețele a selecției.</div>` : '') +
+    (opts.length ? rec.map(([o, i]) => opt(o, i)).join('') +
+      (rest.length ? `<details class="rlMore"${rec.length ? '' : ' open'}><summary>Alte variante (${rest.length})</summary>${rest.map(([o, i]) => opt(o, i)).join('')}</details>` : '')
+      : '<div class="incNote">Nimic de blocat în această selecție.</div>') +
+    ((d.top_ips || []).length ? `<div class="rlIps">IP-uri principale: ${d.top_ips.map(x => `<code>${tEsc(x.ip)}</code> ${fmtN(x.n)}`).join(' &middot; ')}</div>` : '');
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-rule]');
+  if (b) { e.preventDefault(); e.stopPropagation(); const sp = RULES.specs[+b.dataset.rule]; if (sp) rulesOpen(typeof sp === 'function' ? sp() : sp); return; }
+  const c = e.target.closest('[data-rl-copy]');
+  if (c && RULES.cur) { copyText(RULES.cur.options[+c.dataset.rlCopy].text); return; }
+  if (e.target.id === 'ruleOverlay' || e.target.closest('#rlClose') || (e.target.closest('#ruleOverlay [data-xopen]'))) rulesClose();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#ruleOverlay').classList.contains('open')) { e.stopPropagation(); rulesClose(); } }, true);
+
+// ======================================================================
+// v51 -- "CE S-A INTAMPLAT": 3-5 concluzii in limbaj simplu, imediat dupa
+// upload, fiecare cu actiunile ei (dovezile + regula de blocare). Surse:
+// incidentele (/brief), activitatea automata, retelele IP-urilor unice si
+// sinteza selectiei (5xx, IP dominant). Recalculat la fiecare selectie.
+// ======================================================================
+function gotoCard(page, sel) {
+  showPage(page);
+  let n = 0;
+  const t = setInterval(() => {
+    const el = document.querySelector(sel);
+    if ((el && el.offsetParent && el.offsetHeight > 40) || ++n > 40) {
+      clearInterval(t);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 150);
+}
+async function wkOpenConds(conds) {
+  if (await wkEnsureMeta()) { WK.conds = conds.map(wkMkCond); WK.period = 'global'; WK.offset = 0; }
+  showPage('workplace'); wkSchedule();
+}
+const FIND = { seq: 0, acts: [] };
+function findAct(text, fn, primary) {
+  const id = FIND.acts.push(fn) - 1;
+  return `<button type="button" class="${primary ? 'primary' : 'ghost'} sfSmallBtn" data-find="${id}">${tEsc(text)}</button>`;
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-find]'); if (b && FIND.acts[+b.dataset.find]) FIND.acts[+b.dataset.find](); });
+const SEV_RANK = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, INFO: 1, OK: 0 };
+async function ovFindings(d) {
+  const box = $('#ovFind'); if (!box) return;
+  const seq = ++FIND.seq;
+  box.innerHTML = `<div class="cardHead"><h2>Ce s-a întâmplat</h2><span class="cardHint">concluziile pentru selecția curentă</span></div>` + xpBusy('Se analizează selecția...');
+  let br, au, nw;
+  try {
+    [br, au, nw] = await Promise.all([
+      xpFetchJSON(gfUrl(`/api/dataset/${DATASET_ID}/brief`)),
+      xpFetchJSON(gfUrl(`/api/dataset/${DATASET_ID}/automation`)).catch(() => null),
+      xpFetchJSON(gfUrl(`/api/dataset/${DATASET_ID}/networks?group=asn&max_hits=1&top=3`)).catch(() => null),
+    ]);
+  } catch (e) { if (seq === FIND.seq) box.innerHTML = `<div class="cardHead"><h2>Ce s-a întâmplat</h2></div>` + xpErr('Nu am putut calcula concluziile: ' + e.message); return; }
+  if (seq !== FIND.seq) return;
+  FIND.acts = [];
+  const tot = Math.max(1, d.requests || 0);
+  const P = n => pct(n, tot);
+  const F = [];
+  const incs = (br.incidents || []).slice().sort((a, b) => (SEV_RANK[b.severity] || 0) - (SEV_RANK[a.severity] || 0));
+  const fa = incs.find(x => x.kind === 'filter_attack');
+  if (fa) {
+    const t = (fa.affected || [])[0] || '';
+    const e5 = br.exec ? null : null;
+    F.push({ sev: fa.severity, title: 'Atac distribuit pe filtrele magazinului' + (t ? ` (${t})` : ''),
+      text: `${fmtN(br.exec.filter_requests)} cereri cu parametri de filtrare (${P(br.exec.filter_requests)} din trafic), de la ${fmtN(br.exec.filter_unique_ips)} IP-uri diferite. ` +
+        `Fiecare combinație de filtre e o pagină generată de PHP + MySQL, necache-uită -- ` + ((fa.why || [])[0] ? tEsc(fa.why[0]) + '.' : 'încarcă serverul.'),
+      acts: findAct('Vezi atacul', () => gotoCard('security', '#faCard'), true) + findAct('IP-urile pe rețele', () => gotoCard('ip', '#netCard')) +
+        ruleBtn({ kind: 'filter_attack', label: 'atac pe filtre' + (t ? ' ' + t : '') }) });
+  }
+  incs.filter(x => x.kind !== 'filter_attack').slice(0, 3).forEach(x => {
+    F.push({ sev: x.severity, title: x.title.replace(/^[A-Z ĂÂÎȘȚ]+ -- /, m => m.charAt(0) + m.slice(1).toLowerCase()),
+      text: tEsc((x.observed || [])[0] || x.interpretation || ''),
+      acts: findAct('Profil IP', () => XP.open('ip', x.ip), true) + findAct('Detalii în Securitate', () => gotoCard('security', '#sfIncs')) + ruleBtn({ ip: x.ip, label: x.ip }) });
+  });
+  if (nw && nw.single_hit_ips >= 500 && nw.single_hit_ips >= 0.5 * nw.selection_ips) {
+    const isp = nw.isp_ips != null ? Math.round(100 * nw.isp_ips / Math.max(1, nw.matched_ips)) : null;
+    F.push({ sev: isp != null && isp >= 70 ? 'HIGH' : 'MEDIUM', title: 'Mii de IP-uri cu o singură cerere -- rotație de proxy-uri',
+      text: `${fmtN(nw.single_hit_ips)} din ${fmtN(nw.selection_ips)} IP-uri au făcut o singură cerere` + (isp != null ? `, ${isp}% de la operatori de internet (rezidențial / mobil)` : '') +
+        `, împrăștiate pe ${fmtN(nw.n_groups)} rețele. Blocarea pe IP nu ajută: fiecare adresă vine o singură dată.`,
+      acts: findAct('Vezi rețelele', () => gotoCard('ip', '#netCard'), true) + findAct('Deschide în Workplace', () => wkOpenConds([{ field: 'ip_hits', op: 'range', values: [null, 1] }])) +
+        ruleBtn({ conds: [{ field: 'ip_hits', op: 'range', values: [null, 1] }], label: 'IP-uri cu o singură cerere' }) });
+  }
+  const e5 = d.err_5xx || 0;
+  if (e5 / tot >= 0.03 && e5 >= 50) {
+    F.push({ sev: e5 / tot >= 0.08 ? 'HIGH' : 'MEDIUM', title: 'Serverul a cedat la o parte din cereri (erori 5xx)',
+      text: `${fmtN(e5)} răspunsuri 5xx (${P(e5)} din cereri)` + (fa && fa.signals ? '; o parte coincid cu atacul pe filtre de mai sus' : '') +
+        '. Vizitatorii reali primesc pagini de eroare în aceste momente.',
+      acts: findAct('Vezi erorile', () => { triageSetSingleFilter('sclass', '5xx'); showPage('errors'); }, true) });
+  }
+  const cats = ((au && au.categories) || []).filter(c => c.requests >= Math.max(20, 0.01 * tot)).sort((a, b) => b.requests - a.requests);
+  cats.slice(0, 2).forEach(c => {
+    F.push({ sev: ['vuln_scan', 'scan_tools', 'brute_login', 'fake_bots'].includes(c.key) ? 'HIGH' : 'MEDIUM', title: c.title,
+      text: `${fmtN(c.ips)} IP-uri, ${fmtN(c.requests)} cereri (${P(c.requests)}). ${tEsc(c.desc)}` +
+        (c.top.length ? ` Principalul: <a href="#" data-ek="ip" data-ev="${tEscAttr(c.top[0].ip)}" data-xopen="1">${flagHtml(c.top[0].country)}${tEsc(c.top[0].ip)}</a> (${fmtN(c.top[0].n)}).` : ''),
+      acts: findAct('Deschide în Workplace', () => wkOpenConds(c.conds), true) + ruleBtn({ conds: c.conds, label: c.title }) });
+  });
+  const top = (d.top_ips || [])[0];
+  if (top && top.n / tot >= 0.08 && !F.some(f => f.text.includes(top.ip))) {
+    F.push({ sev: top.n / tot >= 0.2 ? 'HIGH' : 'MEDIUM', title: `Un singur IP face ${P(top.n)} din trafic`,
+      text: `<a href="#" data-ek="ip" data-ev="${tEscAttr(top.ip)}" data-xopen="1">${flagHtml(top.country)}${tEsc(top.ip)}</a> -- ${fmtN(top.n)} cereri. Verifică dacă e un crawler legitim, un monitor sau un script.`,
+      acts: findAct('Profil IP', () => XP.open('ip', top.ip), true) + ruleBtn({ ip: top.ip, label: top.ip }) });
+  }
+  F.sort((a, b) => (SEV_RANK[b.sev] || 0) - (SEV_RANK[a.sev] || 0));
+  const shown = F.slice(0, 5);
+  const sevLbl = { CRITICAL: 'CRITIC', HIGH: 'RIDICAT', MEDIUM: 'MEDIU', LOW: 'INFO', INFO: 'INFO' };
+  box.innerHTML = `<div class="cardHead"><h2>Ce s-a întâmplat</h2><span class="cardHint">${shown.length ? `${shown.length} ${shown.length === 1 ? 'concluzie' : 'concluzii'} pentru selecția curentă` : 'selecția curentă'}</span></div>` +
+    (shown.length ? '<div class="ovFList">' + shown.map(f => `<div class="ovF sev-${tEscAttr(f.sev)}">
+        <div class="ovFSev"><span class="ovFTag">${sevLbl[f.sev] || f.sev}</span></div>
+        <div class="ovFMain"><div class="ovFT">${tEsc(f.title)}</div><div class="ovFX">${f.text}</div><div class="ovFA">${f.acts}</div></div></div>`).join('') + '</div>'
+      : `<div class="ovF sev-OK"><div class="ovFSev"><span class="ovFTag">OK</span></div><div class="ovFMain"><div class="ovFT">Nimic neobișnuit în selecție</div>
+          <div class="ovFX">Niciun atac, nicio activitate automată semnificativă, erorile de server sub 3%. Detaliile complete sunt mai jos.</div></div></div>`) +
+    (F.length > shown.length ? `<div class="incNote">Încă ${F.length - shown.length} în <a href="#" data-goto="security">Security &amp; Triaj</a>.</div>` : '');
+  // fraza de securitate din rezumat tine cont si de incidente (atacul pe filtre nu e un "eveniment" pe linie)
+  if (incs.length) {
+    const p = [...$('#ovLeadText').querySelectorAll('p')].find(x => x.textContent.startsWith('Securitate:'));
+    const hi = incs.filter(x => x.severity === 'HIGH' || x.severity === 'CRITICAL').length;
+    if (p && hi) p.innerHTML = `Securitate: <b class="tHigh">${fmtN(hi)} ${hi === 1 ? 'incident' : 'incidente'} ${incs[0].severity}</b> -- vezi „Ce s-a întâmplat” de mai sus.`;
+  }
+}
+const _v51RenderOverview = renderOverview;
+renderOverview = async function () {
+  const r = await _v51RenderOverview.apply(this, arguments);
+  if (CURRENT_PAGE === 'overview' && TRIAGE.ready) {
+    try { const d = await selData(); if (CURRENT_PAGE === 'overview' && d.requests) ovFindings(d); else if (!d.requests) $('#ovFind').innerHTML = ''; } catch (e) {}
+  }
+  return r;
+};
+MOD_HOOKS.overview = renderOverview;
+
+// ======================================================================
+// v51 -- PROFIL IP complet in panoul lateral: furnizor, bloc, tip (cloud /
+// rezidential), crawler verificat, vecinii din aceeasi retea si de la acelasi
+// furnizor, un verdict in limbaj simplu si regula de blocare. Plus butonul
+// "Regula" pentru orice entitate deschisa (IP, URL, tara, User-Agent).
+// ======================================================================
+function xpRuleSpec(kind, value) {
+  const c = { ip: { field: 'ip', op: 'in', values: [value] }, path: { field: 'path_only', op: 'exact', values: [value] },
+              prefix: { field: 'path', op: 'contains', values: [value] }, country: { field: 'country', op: 'in', values: [value] },
+              ua: value ? { field: 'ua', op: 'exact', values: [value] } : { field: 'ua', op: 'empty', values: [] },
+              method: { field: 'method', op: 'in', values: [value] } }[kind];
+  if (kind === 'sel') return { label: 'selecția curentă' };
+  return c ? { conds: [c], label: entLabel(kind, value) } : null;
+}
+function xpVerdict(d, id) {
+  const rpm = +d.req_per_min || 0, err = d.requests ? (d.err_4xx + d.err_5xx) / d.requests : 0;
+  if (id.crawler === 'verified') return ['ok', 'Crawler legitim, verificat prin DNS -- nu-l bloca (ar afecta indexarea în motoarele de căutare).'];
+  if (id.crawler === 'fake') return ['bad', 'Se prezintă drept crawler (Googlebot / Bingbot...), dar IP-ul nu aparține motorului: boț fals.'];
+  const why = [];
+  if (id.kind === 'cloud') why.push(`vine din cloud / hosting (${id.asn}), nu de la un operator de internet`);
+  if (rpm >= 30) why.push(`ritm de ${String(rpm).replace('.', ',')} cereri / minut`);
+  if (d.unique_paths >= 150) why.push(`${fmtN(d.unique_paths)} URL-uri diferite`);
+  if (d.requests >= 20 && err >= 0.5) why.push(`${Math.round(100 * err)}% din cereri primesc erori (caută căi care nu există)`);
+  if (d.unique_uas >= 5) why.push(`${fmtN(d.unique_uas)} User-Agent-uri diferite`);
+  const bot = ((d.user_agents || [])[0] || {}).ua || '';
+  const bm = bot.match(/([A-Za-z][\w-]*(?:bot|crawler|spider))\b/i);
+  if (bm) why.unshift(`se declară „${bm[1]}”`);
+  if (why.length >= 2 || (why.length && d.requests >= 500)) return ['bad', 'Trafic automat: ' + why.join('; ') + '.'];
+  if (why.length) return ['warn', 'De urmărit: ' + why.join('; ') + '.'];
+  return ['ok', 'Comportament compatibil cu un vizitator obișnuit' + (id.kind === 'isp' ? ' (conexiune de internet rezidențială / mobilă).' : '.')];
+}
+async function xpIdentFill(v, d) {
+  const box = $('#xpIdent'); if (!box) return;
+  let id;
+  try { id = await xpFetchJSON(gfUrl(`/api/dataset/${DATASET_ID}/ip_identity?ip=${encodeURIComponent(v.value)}`)); }
+  catch (e) { box.innerHTML = `<div class="spMsg">Identitate indisponibilă: ${tEsc(e.message)}</div>`; return; }
+  if (!document.body.contains(box)) return;
+  const [lv, txt] = xpVerdict(d, id);
+  const kind = id.kind === 'cloud' ? '<span class="xpIdK cloud">cloud / hosting</span>' : id.kind === 'isp' ? '<span class="xpIdK isp">rezidențial / mobil</span>' : '';
+  const cr = id.crawler === 'verified' ? '<span class="xpIdK ok">crawler verificat DNS</span>' : id.crawler === 'fake' ? '<span class="xpIdK bad">crawler FALS</span>' : '';
+  const ua = (d.user_agents || [])[0];
+  const net = id.subnet || '';
+  box.innerHTML = `<div class="xpVerd ${lv}">${tEsc(txt)}</div>
+    <div class="xpIdGrid">
+      <div class="k">Furnizor</div><div class="v">${tEsc(id.asn || 'necunoscut')} ${kind} ${cr}</div>
+      ${id.cidr ? `<div class="k">Bloc de rețea</div><div class="v"><code>${tEsc(id.cidr)}</code></div>` : ''}
+      ${net ? `<div class="k">Aceeași rețea</div><div class="v"><code>${tEsc(net)}</code>: <b>${fmtN(id.subnet_ips || 0)}</b> IP-uri, ${fmtN(id.subnet_requests || 0)} cereri în selecție
+        ${(id.subnet_ips || 0) > 1 ? `<a href="#" class="xpIdLnk" data-xid-wk="cidr">vezi în Workplace</a>` : ''}</div>` : ''}
+      ${id.asn ? `<div class="k">Același furnizor</div><div class="v"><b>${fmtN(id.asn_ips || 0)}</b> IP-uri, ${fmtN(id.asn_requests || 0)} cereri <a href="#" class="xpIdLnk" data-xid-wk="asn">vezi în Workplace</a></div>` : ''}
+      ${ua ? `<div class="k">User-Agent</div><div class="v xpIdUa">${tEsc(ua.ua || '(gol)')}${(d.user_agents || []).length > 1 ? ` <span class="xpHint">+ încă ${(d.user_agents.length - 1)}</span>` : ''}</div>` : ''}
+    </div>
+    <div class="xpIdAct">${ruleBtn({ ip: v.value, label: v.value }, 'Regulă de blocare pentru IP')}${net && (id.subnet_ips || 0) > 1 ? ruleBtn({ conds: [{ field: 'ip', op: 'cidr', values: [net] }], label: 'rețeaua ' + net }, 'Regulă pentru rețeaua ' + net) : ''}</div>`;
+  if (lv !== 'ok') {
+    // pragurile vechi ("Niciun prag depasit") ar contrazice verdictul de mai sus
+    const secs = [...$('#xpBody').querySelectorAll('.ipProfSec')].filter(x => x.textContent === 'Comportament');
+    secs.forEach(x => { const n = x.nextElementSibling; if (n && n.textContent.startsWith('Niciun prag')) { n.remove(); x.remove(); } });
+  }
+  box.querySelectorAll('[data-xid-wk]').forEach(a => a.onclick = (e) => {
+    e.preventDefault();
+    wkOpenConds([a.dataset.xidWk === 'asn' ? { field: 'asn', op: 'in', values: [id.asn] } : { field: 'ip', op: 'cidr', values: [net] }]);
+  });
+}
+const _v51Sum = xpSumHtml;
+xpSumHtml = function (v, d) {
+  const h = _v51Sum(v, d);
+  if (v.kind !== 'ip') return h;
+  setTimeout(() => xpIdentFill(v, d), 0);
+  return `<div class="xpIdent" id="xpIdent">${xpBusy('Se identifică furnizorul și rețeaua...')}</div>` + h;
+};
+const _v51RenderEntity = xpRenderEntity;
+xpRenderEntity = function (v, seq) {
+  const r = _v51RenderEntity(v, seq);
+  const sp = xpRuleSpec(v.kind, v.value);
+  if (sp) $('#xpActions').insertAdjacentHTML('afterbegin', ruleBtn(sp, 'Regulă', 'xpRuleBtn'));
+  return r;
+};
+
+// ======================================================================
+// v51 -- BARA COMPACTA (fixa sus, apare cand panglica perioadei iese din
+// ecran): mini-grafic pe tot logul cu selectie prin tragere, filtrele active
+// (cu x), Reseteaza tot, Copiaza link, Compara perioade.
+// ======================================================================
+const CBAR = { buckets: [], bsec: 0, key: null, drag: null, visible: false };
+function ctxContentGf() { const o = gfObject(); delete o.ts_from; delete o.ts_to; return Object.keys(o).length ? JSON.stringify(o) : ''; }
+async function ctxLoadHist() {
+  if (!TRIAGE.ready || TRIAGE.boundsFrom == null) return;
+  const gf = ctxContentGf(), key = DATASET_ID + '|' + gf;
+  if (key === CBAR.key) { ctxDraw(); return; }
+  CBAR.key = key;
+  const a = Math.floor(TRIAGE.boundsFrom), b = Math.floor(TRIAGE.boundsTo);
+  const bucket = pickBucketSeconds(Math.max(1, b - a));
+  const p = new URLSearchParams({ bucket_seconds: bucket, ts_from: a, ts_to: b });
+  if (gf) p.set('gf', gf);
+  try {
+    const d = await xpFetchJSON(`/api/dataset/${DATASET_ID}/histogram?${p}`);
+    if (CBAR.key !== key) return;
+    CBAR.buckets = d.buckets || []; CBAR.bsec = d.bucket_seconds || bucket;
+  } catch (e) { CBAR.buckets = []; }
+  ctxDraw();
+}
+function ctxGeom() {
+  const cv = $('#ctxHist'), r = cv.getBoundingClientRect();
+  return { cv, w: r.width, h: r.height, a: TRIAGE.boundsFrom, b: TRIAGE.boundsTo + 1 };
+}
+function ctxX2T(x) { const g = ctxGeom(); return g.a + Math.max(0, Math.min(1, x / g.w)) * (g.b - g.a); }
+function ctxDraw() {
+  const cv = $('#ctxHist'); if (!cv || !CBAR.visible) return;
+  const g = ctxGeom(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(g.w * dpr); cv.height = Math.round(g.h * dpr);
+  const c = cv.getContext('2d'); c.scale(dpr, dpr); c.clearRect(0, 0, g.w, g.h);
+  const max = Math.max(1, ...CBAR.buckets.map(x => x.total));
+  const span = g.b - g.a;
+  const sa = gfTimeNarrowed() ? TRIAGE.tsFrom : null, sb = gfTimeNarrowed() ? TRIAGE.tsTo + 1 : null;
+  CBAR.buckets.forEach(x => {
+    const x0 = (x.bucket - g.a) / span * g.w, bw = Math.max(1, CBAR.bsec / span * g.w - 0.5);
+    const hh = Math.max(1, (x.total / max) * (g.h - 3));
+    const inSel = sa == null || (x.bucket + CBAR.bsec > sa && x.bucket < sb);
+    c.fillStyle = inSel ? (x.critical ? '#D2384C' : x.high ? '#E08A1E' : 'rgba(11,110,115,.7)') : 'rgba(120,130,140,.28)';
+    c.fillRect(x0, g.h - hh, bw, hh);
+  });
+  const sel = CBAR.drag ? [Math.min(CBAR.drag.t0, CBAR.drag.t1), Math.max(CBAR.drag.t0, CBAR.drag.t1)] : (sa != null ? [sa, sb] : null);
+  if (sel) {
+    const x0 = (sel[0] - g.a) / span * g.w, x1 = (sel[1] - g.a) / span * g.w;
+    c.fillStyle = 'rgba(11,110,115,.10)'; c.fillRect(x0, 0, Math.max(2, x1 - x0), g.h);
+    c.strokeStyle = 'rgba(11,110,115,.9)'; c.lineWidth = 1.5; c.strokeRect(x0 + .75, .75, Math.max(2, x1 - x0) - 1.5, g.h - 1.5);
+  }
+}
+function ctxRender() {
+  const bar = $('#ctxBar'); if (!bar) return;
+  const show = !!DATASET_ID && TRIAGE.ready && !CBAR.ribbonVisible && $('#globalFilterBar').style.display !== 'none';
+  if (show !== CBAR.visible) { CBAR.visible = show; bar.hidden = !show; }
+  if (!show) return;
+  const src = $('#triageActiveFilters');
+  const n = src ? src.children.length : 0;
+  $('#ctxChips').innerHTML = n ? [...src.children].map((el, i) => `<span class="filterChip${el.classList.contains('neg') ? ' neg' : ''}" data-ctxi="${i}">${tEsc(el.firstChild ? el.textContent.replace(/×$/, '') : '')}<span class="x" role="button" aria-label="Elimină filtrul">&times;</span></span>`).join('')
+    : '<span class="ctxNone">fără filtre &middot; tot logul</span>';
+  $('#ctxReset').disabled = !n;
+  ctxLoadHist();
+}
+document.addEventListener('click', (e) => {
+  const x = e.target.closest('#ctxChips .x');
+  if (x) { const i = +x.parentElement.dataset.ctxi; const o = $('#triageActiveFilters').children[i]; if (o) o.querySelector('.x').click(); return; }
+  if (e.target.closest('#ctxReset')) { $('#triageResetBtn').click(); return; }
+  if (e.target.closest('#ctxLink')) { linkCopy(); return; }
+  if (e.target.closest('#ctxCmp')) { cmpOpen(); return; }
+});
+(function ctxWire() {
+  const cv = $('#ctxHist');
+  const tip = (e) => {
+    const r = cv.getBoundingClientRect(), t = ctxX2T(e.clientX - r.left);
+    const bk = CBAR.buckets.find(x => t >= x.bucket && t < x.bucket + CBAR.bsec);
+    cv.title = `${fmtShortTs(Math.floor(t))}${bk ? ' · ' + fmtN(bk.total) + ' cereri' : ''} -- trage ca să alegi perioada, dublu-click: tot logul`;
+  };
+  cv.addEventListener('mousedown', (e) => { const r = cv.getBoundingClientRect(); const t = ctxX2T(e.clientX - r.left); CBAR.drag = { t0: t, t1: t, x0: e.clientX }; e.preventDefault(); });
+  window.addEventListener('mousemove', (e) => {
+    if (!CBAR.drag) { if (e.target === cv) tip(e); return; }
+    const r = cv.getBoundingClientRect(); CBAR.drag.t1 = ctxX2T(e.clientX - r.left); ctxDraw();
+  });
+  window.addEventListener('mouseup', (e) => {
+    const d = CBAR.drag; if (!d) return; CBAR.drag = null;
+    let a, b;
+    if (Math.abs(e.clientX - d.x0) < 4) {     // click: intervalul barei
+      const bk = CBAR.buckets.find(x => d.t0 >= x.bucket && d.t0 < x.bucket + CBAR.bsec);
+      if (!bk) { ctxDraw(); return; }
+      a = bk.bucket; b = bk.bucket + CBAR.bsec - 1;
+    } else { a = Math.floor(Math.min(d.t0, d.t1)); b = Math.ceil(Math.max(d.t0, d.t1)); }
+    triageSetRange(a, b);
+  });
+  cv.addEventListener('dblclick', () => { if (TRIAGE.boundsFrom != null) triageSetRange(TRIAGE.boundsFrom, TRIAGE.boundsTo); });
+  const io = new IntersectionObserver((ents) => { ents.forEach(en => { CBAR.ribbonVisible = en.isIntersecting; }); ctxRender(); }, { rootMargin: '-90px 0px 0px 0px' });
+  io.observe($('.gfRibbon'));
+  window.addEventListener('resize', debounce(ctxDraw, 150));
+})();
+const _v51Chips = triageRenderActiveChips;
+// la schimbari rapide (tragere pe grafic, click-uri succesive) bara si adresa se actualizeaza o data, la final
+const ctxLater = debounce(() => { ctxRender(); linkSync(); }, 200);
+triageRenderActiveChips = function () { const r = _v51Chips.apply(this, arguments); ctxLater(); return r; };
+GF_LISTENERS.push(ctxLater);
+const _v51Show = showPage;
+showPage = function () { const r = _v51Show.apply(this, arguments); ctxLater(); return r; };
+
+// ======================================================================
+// v51 -- LINK care reproduce ecranul: ?d=<analiza>&v=<filtre + perioada +
+// Workplace>#<pagina>. Nimic stocat: analiza e cea din memoria aplicatiei;
+// daca a expirat, filtrele din link se aplica dupa o noua incarcare.
+// ======================================================================
+const LINK = { pending: null };
+function b64e(s) { return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function b64d(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return decodeURIComponent(escape(atob(s))); }
+function linkState() {
+  const st = { f: TRIAGE.filters };
+  if (gfTimeNarrowed()) { st.a = Math.floor(TRIAGE.tsFrom); st.b = Math.floor(TRIAGE.tsTo); }
+  if (CURRENT_PAGE === 'workplace' && typeof WK !== 'undefined' && WK.conds.length)
+    st.wk = { conds: WK.conds.map(c => ({ field: c.field, op: c.op, values: c.values, not: c.not, off: c.off })), period: WK.period, from: WK.from, to: WK.to };
+  return st;
+}
+function linkUrl() {
+  const p = new URLSearchParams({ d: DATASET_ID });
+  const st = linkState();
+  if (JSON.stringify(st) !== JSON.stringify({ f: emptyTriageFilters() })) p.set('v', b64e(JSON.stringify(st)));
+  return location.origin + location.pathname + '?' + p + '#' + CURRENT_PAGE;
+}
+function linkSync() {
+  if (!DATASET_ID || !TRIAGE.ready || LINK.applying) return;
+  try { history.replaceState(history.state, '', linkUrl()); } catch (e) {}
+}
+function linkCopy() { linkSync(); copyText(linkUrl()); toast('Link copiat -- deschide exact acest ecran cât timp aplicația rulează.'); }
+async function linkApply(st) {
+  if (!st) return;
+  LINK.applying = true;
+  try {
+    TRIAGE.filters = Object.assign(emptyTriageFilters(), st.f || {});
+    TRIAGE.filters.x = Object.assign(emptyTriageFilters().x, (st.f || {}).x || {});
+    $('#triageIpFilter').value = TRIAGE.filters.ip || ''; $('#triagePathFilter').value = TRIAGE.filters.pathContains || '';
+    if (st.a != null && st.b != null) triageSetRange(st.a, st.b, true);
+    triageRenderMultiSelects();
+    _v51Chips();
+    triageReloadAll();
+    if (st.wk && await wkEnsureMeta()) {
+      WK.conds = st.wk.conds.map(c => Object.assign(wkMkCond(c), { off: !!c.off }));
+      WK.period = st.wk.period || 'global'; WK.from = st.wk.from; WK.to = st.wk.to; WK.offset = 0;
+      if (CURRENT_PAGE === 'workplace') { showPage('workplace', true); wkSchedule(); }
+    }
+  } finally { LINK.applying = false; linkSync(); }
+}
+const _v51AfterReady = gfAfterIndexReady;
+gfAfterIndexReady = function () {
+  const r = _v51AfterReady.apply(this, arguments);
+  if (LINK.pending) { const st = LINK.pending; LINK.pending = null; setTimeout(() => linkApply(st), 0); }
+  ctxRender();
+  return r;
+};
+(async function linkBoot() {
+  const q = new URLSearchParams(location.search);
+  const id = q.get('d'); if (!id || !/^[0-9a-f]{32}$/.test(id)) return;
+  try { LINK.pending = q.get('v') ? JSON.parse(b64d(q.get('v'))) : null; } catch (e) { LINK.pending = null; }
+  try {
+    const r = await fetch(`/api/dataset/${id}/reopen`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || r.status);
+    dropzone.style.display = 'none';
+    _onUploadSuccess(d);
+  } catch (e) {
+    try { history.replaceState(null, '', location.pathname + location.hash); } catch (e2) {}
+    const dz = document.querySelector('#dropzone .dzSub');
+    if (dz) dz.insertAdjacentHTML('afterend', `<p class="dzLink">Linkul deschis se referă la o analiză care nu mai e în memorie (aplicația a fost repornită). Încarcă din nou fișierul${LINK.pending ? ' -- filtrele și perioada din link se aplică automat' : ''}.</p>`);
+  }
+})();
+
+// ======================================================================
+// v51 -- COMPARA PERIOADE: A (referinta) fata de B, pe aceleasi filtre.
+// Ce e nou in B, ce a crescut (rata pe ora), ce a disparut.
+// ======================================================================
+const CMP = { seq: 0 };
+function cmpDefaults() {
+  const lo = Math.floor(TRIAGE.boundsFrom), hi = Math.floor(TRIAGE.boundsTo);
+  let b0, b1;
+  if (gfTimeNarrowed()) { b0 = Math.floor(TRIAGE.tsFrom); b1 = Math.floor(TRIAGE.tsTo); }
+  else { const mid = Math.floor((lo + hi) / 2); return [lo, mid, mid + 1, hi]; }
+  const len = b1 - b0 + 1;
+  let a1 = b0 - 1, a0 = a1 - len + 1;
+  if (a0 < lo) { a0 = lo; a1 = Math.max(lo, b0 - 1); }
+  if (a1 <= a0) { a0 = b1 + 1; a1 = Math.min(hi, b1 + len); }   // nimic inainte: compara cu ce urmeaza
+  return [a0, a1, b0, b1];
+}
+function cmpPresets() {
+  const lo = Math.floor(TRIAGE.boundsFrom), hi = Math.floor(TRIAGE.boundsTo), mid = Math.floor((lo + hi) / 2);
+  const P = [['Prima jumătate vs. a doua', [lo, mid, mid + 1, hi]]];
+  if (gfTimeNarrowed()) P.unshift(['Selecția vs. aceeași durată dinainte', cmpDefaults()]);
+  if (hi - lo > 2 * 86400) P.push(['Ultimele 24 h vs. cele 24 h dinainte', [hi - 2 * 86400 + 1, hi - 86400, hi - 86400 + 1, hi]]);
+  if (hi - lo > 2 * 3600) P.push(['Ultima oră vs. ora dinainte', [hi - 7199, hi - 3600, hi - 3599, hi]]);
+  return P;
+}
+function cmpOpen() {
+  if (!TRIAGE.ready) return;
+  const [a0, a1, b0, b1] = cmpDefaults();
+  const dt = e => epochToDtLocal(e, TRIAGE.tzOffset);
+  $('#rlTitle').textContent = 'Compară perioade';
+  $('#rlSub').textContent = 'aceleași filtre: ' + gfDescribe({ contentOnly: true });
+  $('#rlBody').innerHTML = `<div class="cmpForm">
+      <div class="cmpSide"><div class="cmpLbl"><span class="cmpTag a">A</span> perioada de referință</div>
+        <input type="datetime-local" step="1" id="cmpA0" value="${dt(a0)}"><span>până la</span><input type="datetime-local" step="1" id="cmpA1" value="${dt(a1)}"></div>
+      <div class="cmpSide"><div class="cmpLbl"><span class="cmpTag b">B</span> perioada analizată</div>
+        <input type="datetime-local" step="1" id="cmpB0" value="${dt(b0)}"><span>până la</span><input type="datetime-local" step="1" id="cmpB1" value="${dt(b1)}"></div>
+      <div class="cmpPresets">${cmpPresets().map((p, i) => `<button type="button" class="ghost sfSmallBtn" data-cmpp="${i}">${tEsc(p[0])}</button>`).join('')}
+        <button type="button" class="primary sfSmallBtn" id="cmpRun">Compară</button></div></div><div id="cmpOut"></div>`;
+  $('#ruleOverlay').classList.add('open');
+  RULES.cur = null;
+  const P = cmpPresets();
+  $('#rlBody').querySelectorAll('[data-cmpp]').forEach(b => b.onclick = () => {
+    const v = P[+b.dataset.cmpp][1];
+    ['#cmpA0', '#cmpA1', '#cmpB0', '#cmpB1'].forEach((s, i) => { $(s).value = dt(v[i]); });
+    cmpRun();
+  });
+  $('#cmpRun').onclick = cmpRun;
+  cmpRun();
+}
+async function cmpRun() {
+  const v = ['#cmpA0', '#cmpA1', '#cmpB0', '#cmpB1'].map(s => dtLocalToEpoch($(s).value, TRIAGE.tzOffset));
+  if (v.some(x => x == null) || v[1] < v[0] || v[3] < v[2]) { $('#cmpOut').innerHTML = xpErr('Alege începutul și sfârșitul ambelor perioade (sfârșitul după început).'); return; }
+  const seq = ++CMP.seq;
+  $('#cmpOut').innerHTML = xpBusy('Se compară...');
+  const p = new URLSearchParams({ a_from: v[0], a_to: v[1], b_from: v[2], b_to: v[3], top: 10 });
+  const gf = ctxContentGf(); if (gf) p.set('gf', gf);
+  let d;
+  try { d = await xpFetchJSON(`/api/dataset/${DATASET_ID}/diff?${p}`); } catch (e) { if (seq === CMP.seq) $('#cmpOut').innerHTML = xpErr('Eroare: ' + e.message); return; }
+  if (seq !== CMP.seq) return;
+  CMP.range = v;
+  const A = d.a, B = d.b;
+  const ch = (x, y, worseUp) => {
+    if (!x && !y) return '<td class="num">-</td>';
+    if (!x) return '<td class="num up">nou</td>';
+    const pc = Math.round(100 * (y - x) / x);
+    return `<td class="num ${pc === 0 ? '' : ((pc > 0) === worseUp ? 'up' : 'down')}">${pc > 0 ? '+' : ''}${pc}%</td>`;
+  };
+  const num = x => String(x).replace('.', ',');
+  const lead = [];
+  if (B.requests && A.requests) {
+    const r = B.per_min / Math.max(0.01, A.per_min);
+    if (r >= 1.5) lead.push(`Traficul e de <b>${num(r.toFixed(1))}×</b> mai mare în B (${num(B.per_min)} față de ${num(A.per_min)} cereri / minut).`);
+    else if (r <= 0.67) lead.push(`Traficul e de <b>${num((1 / r).toFixed(1))}×</b> mai mic în B.`);
+    else lead.push('Volumul de trafic e similar în cele două perioade.');
+  }
+  if (B.new_ip_requests) lead.push(`<b>${pct(B.new_ip_requests, B.requests)}</b> din cererile din B vin de la IP-uri care nu apăruseră deloc în A (${fmtN(B.new_ips)} IP-uri noi).`);
+  if (B.pct_5xx - A.pct_5xx >= 2) lead.push(`Erorile de server au crescut de la ${num(A.pct_5xx)}% la <b>${num(B.pct_5xx)}%</b>.`);
+  const dimHtml = (k) => {
+    const x = d.dims[k]; if (!x) return '';
+    const lab = r => k === 'country' ? `${flagHtml(r.key === '??' ? '' : r.key)}${tEsc(r.key === '??' ? 'nedeterminată' : ccLabel(r.key))}`
+      : k === 'ip' ? `<a href="#" data-ek="ip" data-ev="${tEscAttr(r.key)}" data-xopen="1">${tEsc(r.key)}</a>` : `<span class="${k === 'path' ? 'cmpMono' : ''}">${tEsc(r.key)}</span>`;
+    const list = (rows, mode) => rows.length ? '<table class="cmpDiff">' + rows.map(r => `<tr><td>${lab(r)}</td><td class="num">${mode === 'new' ? fmtN(r.b) : mode === 'gone' ? fmtN(r.a) : `${fmtN(Math.round(r.a_scaled))} &rarr; <b>${fmtN(r.b)}</b>`}</td></tr>`).join('') + '</table>' : '<div class="cmpNone">nimic</div>';
+    return `<div class="cmpDim"><h4>${tEsc(x.label)}</h4>
+      <div class="cmpCols"><div><div class="cmpH new">Noi în B <span>${fmtN(x.n_new)}${x.new_requests ? ' · ' + fmtN(x.new_requests) + ' cereri' : ''}</span></div>${list(x.new, 'new')}</div>
+        <div><div class="cmpH up">Au crescut <span>${fmtN(x.n_grew)} · A ajustat la durata lui B &rarr; B</span></div>${list(x.grew, 'grew')}</div>
+        <div><div class="cmpH gone">Au dispărut <span>${fmtN(x.n_gone)}</span></div>${list(x.gone, 'gone')}</div></div></div>`;
+  };
+  $('#cmpOut').innerHTML = `${lead.length ? `<div class="rlWhy">${lead.join(' ')}</div>` : ''}
+    <table class="cmpTbl cmpTot"><thead><tr><th></th><th><span class="cmpTag a">A</span> ${tEsc(fmtShortTs(v[0]))} – ${tEsc(fmtShortTs(v[1]))}</th><th><span class="cmpTag b">B</span> ${tEsc(fmtShortTs(v[2]))} – ${tEsc(fmtShortTs(v[3]))}</th><th>B față de A</th></tr></thead><tbody>
+      <tr><td>Cereri</td><td class="num">${fmtN(A.requests)}</td><td class="num">${fmtN(B.requests)}</td><td></td></tr>
+      <tr><td>Cereri / minut</td><td class="num">${num(A.per_min)}</td><td class="num">${num(B.per_min)}</td>${ch(A.per_min, B.per_min, true)}</tr>
+      <tr><td>IP-uri unice</td><td class="num">${fmtN(A.unique_ips)}</td><td class="num">${fmtN(B.unique_ips)}</td>${ch(A.unique_ips, B.unique_ips, true)}</tr>
+      <tr><td>Erori 4xx</td><td class="num">${num(A.pct_4xx)}%</td><td class="num">${num(B.pct_4xx)}%</td>${ch(A.pct_4xx, B.pct_4xx, true)}</tr>
+      <tr><td>Erori 5xx</td><td class="num">${num(A.pct_5xx)}%</td><td class="num">${num(B.pct_5xx)}%</td>${ch(A.pct_5xx, B.pct_5xx, true)}</tr></tbody></table>
+    ${['asn', 'ip', 'country', 'path'].map(dimHtml).join('')}
+    <div class="cmpFoot"><button type="button" class="ghost sfSmallBtn" id="cmpUseB">Aplică perioada B în toată aplicația</button>
+      <span class="note">Liniile cu mai puțin de 3 cereri sunt ignorate, ca listele să arate schimbările reale, nu zgomotul.</span></div>`;
+  $('#cmpUseB').onclick = () => { rulesClose(); triageSetRange(v[2], v[3]); };
+}
+
+// ======================================================================
+// v51 -- TABELE UNIFORME: pe orice tabel din pagini (cu antet, >= 6 randuri)
+// apare aceeasi bara: cautare rapida, copiere coloana (ex. toate IP-urile,
+// pentru o lista de blocare), export CSV; sortare pe orice coloana (unde
+// tabelul nu are deja sortarea lui pe date) si antet fix la derulare.
+// ======================================================================
+const TBLX_SKIP = '#xpDrawer, #ruleOverlay, #modalOverlay, #auditDrawer, .heatmap-table, .cmpDiff, .spList';
+function tblxText(td) { return (td ? td.innerText || td.textContent || '' : '').replace(/\s+/g, ' ').trim(); }
+function tblxNum(s) {
+  const t = String(s).trim().split(' ')[0].replace(/%$/, '');
+  if (!/^[-+]?\d[\d.]*(,\d+)?$/.test(t)) return null;
+  return parseFloat(t.replace(/\./g, '').replace(',', '.'));
+}
+function tblxHeads(t) { return [...t.querySelectorAll('thead tr:last-child th')]; }
+function tblxRows(t) { return [...(t.tBodies[0] ? t.tBodies[0].rows : [])]; }
+function tblxApply(t) {
+  const bar = t._tblx; if (!bar) return;
+  const q = bar.querySelector('input').value.trim().toLowerCase();
+  const rows = tblxRows(t);
+  let shown = 0;
+  rows.forEach(r => { const ok = !q || r.textContent.toLowerCase().includes(q); r.style.display = ok ? '' : 'none'; if (ok) shown++; });
+  bar.querySelector('.tblxN').textContent = q ? `${fmtN(shown)} din ${fmtN(rows.length)} rânduri` : `${fmtN(rows.length)} rânduri`;
+}
+function tblxVisible(t) { return tblxRows(t).filter(r => r.style.display !== 'none'); }
+function tblxCsv(t) {
+  const q = v => /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const head = tblxHeads(t).map(th => q(tblxText(th).replace(/[▲▼]$/, '').trim()));
+  const lines = [head.join(',')].concat(tblxVisible(t).map(r => [...r.cells].map(c => q(tblxText(c))).join(',')));
+  const name = (t.id || (t.closest('section,.card') || {}).id || 'tabel') + '.csv';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function tblxSort(t, i, th) {
+  const dir = th.dataset.tblxDir === 'desc' ? 'asc' : 'desc';
+  tblxHeads(t).forEach(h => { delete h.dataset.tblxDir; const ar = h.querySelector('.tblxAr'); if (ar) ar.textContent = ''; });
+  th.dataset.tblxDir = dir; th.querySelector('.tblxAr').textContent = dir === 'desc' ? '▼' : '▲';
+  const rows = tblxRows(t);
+  const vals = rows.map(r => tblxText(r.cells[i]));
+  const nums = vals.map(tblxNum);
+  const numeric = nums.filter(x => x != null).length >= 0.7 * vals.filter(Boolean).length;
+  const idx = rows.map((_, k) => k).sort((a, b) => {
+    let c = numeric ? (nums[a] ?? -Infinity) - (nums[b] ?? -Infinity) : vals[a].localeCompare(vals[b], 'ro', { numeric: true });
+    return (dir === 'desc' ? -c : c) || a - b;
+  });
+  const tb = t.tBodies[0]; t._tblxSorting = true;
+  idx.forEach(k => tb.appendChild(rows[k]));
+  t._tblxSorting = false;
+}
+function tblxEnhance(t) {
+  if (t._tblx || t.closest(TBLX_SKIP) || !t.tBodies[0]) return;
+  const heads = tblxHeads(t);
+  if (heads.length < 2 || tblxRows(t).length < 6) return;
+  if (tblxRows(t).some(r => r.cells.length !== heads.length || r.querySelector('[colspan]'))) return;
+  const bar = document.createElement('div');
+  bar.className = 'tblx';
+  bar.innerHTML = `<input type="search" placeholder="Caută în tabel…" aria-label="Caută în tabel"><span class="tblxN"></span>
+    <select aria-label="Copiază o coloană"><option value="">Copiază coloana…</option>${heads.map((h, i) => tblxText(h) ? `<option value="${i}">${tEsc(tblxText(h))}</option>` : '').join('')}</select>
+    <button type="button" class="ghost" title="Descarcă rândurile afișate ca CSV">CSV</button>`;
+  const host = (t.parentElement && t.parentElement.children.length === 1 && getComputedStyle(t.parentElement).overflowX !== 'visible') ? t.parentElement : t;
+  host.parentElement.insertBefore(bar, host);
+  t._tblx = bar;
+  // antet fix: fata de fereastra, sau fata de cutia cu derulare proprie in care sta tabelul
+  let el = t.parentElement, inner = false;
+  while (el && el !== document.body) {
+    const cs = getComputedStyle(el);
+    if (cs.overflowY === 'auto' || cs.overflowY === 'scroll') { inner = true; break; }
+    // overflow:hidden face din card un container de derulare (antetul s-ar fixa fata de card); clip taie la fel, fara asta
+    if (cs.overflowY === 'hidden' && cs.overflowX === 'hidden') el.style.overflow = 'clip';
+    el = el.parentElement;
+  }
+  t.classList.add('tblxT'); if (inner) t.classList.add('tblxIn');
+  // cardul are deja o cautare proprie (pe date, nu doar pe randurile afisate) -> o pastram pe aceea
+  const card = t.closest('.card, section');
+  if (card && [...card.querySelectorAll('input')].some(i => !i.closest('.tblx') && /^(cauta|caută|filtreaz|search)/i.test(i.placeholder || ''))) bar.classList.add('noSearch');
+  bar.querySelector('input').addEventListener('input', debounce(() => tblxApply(t), 120));
+  bar.querySelector('select').addEventListener('change', (e) => {
+    const i = +e.target.value; e.target.value = '';
+    if (isNaN(i)) return;
+    const vals = tblxVisible(t).map(r => tblxText(r.cells[i])).filter(Boolean);
+    copyText(vals.join('\n')); toast(`${fmtN(vals.length)} valori copiate din coloana „${tblxText(heads[i])}”`);
+  });
+  bar.querySelector('button').addEventListener('click', () => tblxCsv(t));
+  if (!t.querySelector('th.sortable')) {
+    heads.forEach((th, i) => {
+      if (!tblxText(th) || th.classList.contains('selCol')) return;
+      th.classList.add('tblxSort'); th.insertAdjacentHTML('beforeend', '<span class="tblxAr"></span>');
+      th.title = (th.title ? th.title + ' -- ' : '') + 'click: sortează';
+      th.addEventListener('click', (e) => { if (e.target.closest('a,button,input,select')) return; tblxSort(t, i, th); });
+    });
+  }
+  new MutationObserver(() => { if (!t._tblxSorting) tblxApply(t); }).observe(t.tBodies[0], { childList: true });
+  tblxApply(t);
+}
+const tblxScan = debounce(() => { document.querySelectorAll('main table').forEach(tblxEnhance); }, 250);
+new MutationObserver(tblxScan).observe(document.querySelector('main'), { childList: true, subtree: true });
+new ResizeObserver(() => { document.documentElement.style.setProperty('--tbH', $('#topbar').offsetHeight + 'px'); }).observe($('#topbar'));
 </script>
 </body>
 </html>

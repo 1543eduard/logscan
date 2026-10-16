@@ -1546,6 +1546,87 @@ def test_v50_retele_ip_unice():
     assert st == 400
 
 
+
+@test
+def test_v51_geoip_baze_izolate():
+    """Bazele GeoIP (tari IPv4, IPv6, furnizori ASN) au fiecare modulul lor:
+    incarcarea bazei ASN / IPv6 nu mai schimba tara IP-urilor IPv4."""
+    import random
+    rnd = random.Random(7)
+    ips = [f"{rnd.randint(1, 223)}.{rnd.randint(0, 255)}.{rnd.randint(0, 255)}.{rnd.randint(1, 254)}" for _ in range(2000)]
+    before = [app.country_of(ip) for ip in ips]
+    app._lookup6("2001:4860:4860::8888")
+    app._asn_lookup("8.8.8.8")
+    after = [app.country_of(ip) for ip in ips]
+    diff = [(ip, a, b) for ip, a, b in zip(ips, before, after) if a != b]
+    assert not diff, diff[:5]
+    assert app._asn_lookup("8.8.8.8")[0] == "Google LLC"
+
+
+@test
+def test_v51_reguli_blocare():
+    """Regula de blocare: strategia (IP / subnet / tipar) dupa forma traficului,
+    expresii Cloudflare / CSF / .htaccess corecte si escapate."""
+    _need_store()
+    import blockrules
+    cf, ht, un = blockrules.translate([
+        {"field": "path_only", "op": "exact", "values": ['/a"b']},
+        {"field": "query", "op": "param", "values": ["q"]},
+        {"field": "ua", "op": "contains", "values": ["Python"], "not": True},
+        {"field": "status", "op": "in", "values": ["503"]}])
+    assert cf[0] == 'http.request.uri.path eq "/a\\"b"', cf
+    assert cf[1] == 'any(lower(http.request.uri.args.names[*])[*] eq "q")', cf
+    assert cf[2] == 'not (lower(http.user_agent) contains "python")', cf
+    assert ht[0] == 'RewriteCond %{REQUEST_URI} ^(/a"b)$ [NC]' and ht[2].startswith("RewriteCond %{HTTP_USER_AGENT} !"), ht
+    assert un == ["cod HTTP"], un
+    att = [L(f"73.{i // 250}.{i % 250}.{i % 7 + 1}", "13/Oct/2026:06:%02d:%02d" % (i // 60 % 60, i % 60), "GET",
+             f"/2-acasa?q=Categorii-C{i % 40}/Marca-M{i % 9}&order=product.{('sales', 'price', 'name')[i % 3]}.desc", 200)
+           for i in range(400)]
+    att += [L("5.5.5.5", "13/Oct/2026:07:%02d:%02d" % (i // 60, i % 60), "GET", f"/x{i}", 404) for i in range(300)]
+    att += [L(f"9.9.{i % 2}.{i // 2 + 1}", "13/Oct/2026:08:%02d:%02d" % (i // 60, i % 60), "GET", "/login", 200) for i in range(300)]
+    d, path, part, summary, db, dcol, dbc, store = build_dataset(FIXTURE + att)
+    did = _register(store, dcol)
+    app.DATASETS[did]["summary_cache"] = {"ALL": summary}
+    st, r = call(app.api_block_rules, dataset_id=did, body={"kind": "filter_attack", "label": "fa"})
+    assert st == 200 and r["strategy"] == "pattern", r
+    rec = [o for o in r["options"] if o["recommended"]]
+    assert rec and rec[0]["key"] == "cf_pattern" and '"/2-acasa"' in rec[0]["text"] and "not cf.client.bot" in rec[0]["text"], rec
+    st, r = call(app.api_block_rules, dataset_id=did, body={"ip": "5.5.5.5", "label": "scanner"})
+    assert r["strategy"] == "ip" and r["requests"] == 300, r
+    csf = next(o for o in r["options"] if o["key"] == "csf")
+    assert csf["text"] == 'csf -td 5.5.5.5 86400 "logscan: scanner"', csf["text"]
+    assert not any(o["key"] in ("cf_pattern", "ht_pattern") for o in r["options"])      # tiparul = doar IP-ul
+    st, r = call(app.api_block_rules, dataset_id=did, body={"conds": [{"field": "path_only", "op": "exact", "values": ["/login"]}], "label": "x"})
+    assert r["strategy"] == "subnet" and r["ips"] == 300, r
+    cfip = next(o for o in r["options"] if o["key"] == "cf_ip")
+    assert cfip["text"] == "ip.src in {9.9.0.0/24 9.9.1.0/24}", cfip["text"]
+
+
+@test
+def test_v51_comparatie_perioade_si_identitate():
+    """Compara perioade: IP-uri noi / crescute / disparute (rata pe ora); profilul
+    IP: vecinii din aceeasi /24; link: /reopen intoarce datele de la upload."""
+    _need_store()
+    a = [L(f"10.0.0.{i % 5 + 1}", "13/Oct/2026:10:%02d:00" % (i % 60), "GET", "/", 200) for i in range(100)]
+    b = [L(f"10.0.0.{i % 5 + 1}", "13/Oct/2026:11:%02d:00" % (i % 60), "GET", "/", 200) for i in range(100)]
+    b += [L("77.7.7.7", "13/Oct/2026:11:%02d:30" % (i % 60), "GET", "/nou", 500) for i in range(50)]
+    d, path, part, summary, db, dcol, dbc, store = build_dataset(FIXTURE + a + b)
+    did = _register(store, dcol)
+    app.DATASETS[did]["summary_cache"] = {"ALL": summary}
+    t10 = int(store.ts[store.ip == store.d_ip["10.0.0.1"]].min())        # 13/Oct/2026:10:00:00 in fusul logului
+    st, r = call(app.api_diff, dataset_id=did, a_from=t10, a_to=t10 + 3599, b_from=t10 + 3600, b_to=t10 + 7199)
+    assert st == 200, r
+    ip = r["dims"]["ip"]
+    assert [x["key"] for x in ip["new"]] == ["77.7.7.7"] and ip["new"][0]["b"] == 50, ip
+    assert r["b"]["new_ip_requests"] == 50 and r["b"]["pct_5xx"] > r["a"]["pct_5xx"], r["b"]
+    assert "/nou" in [x["key"] for x in r["dims"]["path"]["new"]]
+    st, idn = call(app.api_ip_identity, dataset_id=did, ip="10.0.0.1")
+    assert st == 200 and idn["subnet"] == "10.0.0.0/24" and idn["subnet_ips"] == 5 and idn["subnet_requests"] == 200, idn
+    st, ro = call(app.api_reopen, dataset_id=did)
+    assert st == 200 and ro["filename"] == "t.log" and ro["days"] and ro["summary"], ro.keys()
+    st, ro = call(app.api_reopen, dataset_id="nu-exista")
+    assert st == 404
+
 if __name__ == "__main__":
     bad = [r for r in RESULTS if r[1]]
     for name, err in RESULTS:
