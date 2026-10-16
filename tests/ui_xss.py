@@ -23,6 +23,12 @@ with sync_playwright() as pw:
     for sp in ("ips", "paths", "countries", "wp", "errors", "raw"):
         page.click(f'#spTabs .spTab[data-sp="{sp}"]')
         page.wait_for_timeout(300)
+    # v50: vederea "Linii originale" afiseaza textul brut al liniilor
+    page.evaluate("() => rawSetView('lines')")
+    page.wait_for_timeout(700)
+    assert page.evaluate("() => document.querySelectorAll('#rawLinesBox script, #rawLinesBox img, #rawLinesBox svg, #rawLinesBox iframe').length") == 0
+    page.evaluate("() => rawSetView('table')")
+    page.wait_for_timeout(300)
     page.locator("#triageViewport .triageRow [data-detail]").first.click()
     page.wait_for_function("() => !document.querySelector('.evRaw .spBusy')")
     page.wait_for_timeout(300)

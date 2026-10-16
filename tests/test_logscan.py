@@ -1417,6 +1417,75 @@ def test_v491_atac_pe_filtre():
     assert st == 200 and not fa0["detected"]
 
 
+@test
+def test_v50_comportament_automat():
+    """Conditiile noi din Workplace (varf/minut, % 4xx, UA-uri/IP, cereri/subnet)
+    calculate exact pe selectie + categoriile 'Activitate automata' (aceleasi
+    conditii, aceleasi cifre ca Workplace) + upload gzip in bucati."""
+    _need_store()
+    ex = []
+    for i in range(70):                                   # 70 de cereri in acelasi minut, un IP
+        ex.append(L("45.9.1.10", "13/Oct/2026:04:10:%02d" % (i % 60), "GET", f"/produs/p{i}/", 200))
+    for i in range(40):                                   # scanner: 40 cereri, 36 x 404
+        ex.append(L("45.9.1.20", "13/Oct/2026:04:20:%02d" % i, "GET", f"/x{i}.php", 404 if i < 36 else 200))
+    for i in range(25):                                   # rotatie de UA: 25 cereri, 5 UA-uri
+        ex.append(L("45.9.1.30", "13/Oct/2026:04:30:%02d" % i, "GET", "/", 200, ua=f"Mozilla/5.0 v{i % 5}"))
+    for i in range(30):                                   # acelasi /24, 30 de IP-uri cu o cerere
+        ex.append(L(f"45.9.2.{i + 1}", "13/Oct/2026:04:40:%02d" % i, "GET", "/", 200))
+    ex.append(L("45.9.1.40", "13/Oct/2026:04:50:00", "GET", "/vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php", 404))
+    d, path, part, summary, db, dcol, dbc, store = build_dataset(FIXTURE + ex)
+    did = _register(store, dcol)
+    app.DATASETS[did]["summary_cache"] = {"ALL": summary}
+
+    def wk(conds):
+        st, r = call(app.api_workplace, dataset_id=did, body={"q": {"conds": conds}, "limit": 500})
+        assert st == 200, r
+        return r["total"], {x["ip"] for x in r["rows"]}
+    R = lambda f, lo=None, hi=None: {"field": f, "op": "range", "values": [lo, hi]}
+    n, ips = wk([R("ip_rpm", 60)])
+    assert n == 70 and ips == {"45.9.1.10"}, (n, ips)
+    n, ips = wk([R("ip_err", 90), R("ip_hits", 30)])
+    assert n == 40 and ips == {"45.9.1.20"}, (n, ips)
+    n, _ = wk([R("ip_err", 100, 100), {"field": "ip", "op": "in", "values": ["45.9.1.40"]}])
+    assert n == 1
+    n, ips = wk([R("ip_uas", 5)])
+    assert ips == {"45.9.1.30"} and n == 25, (n, ips)
+    n, ips = wk([{"field": "ip", "op": "cidr", "values": ["45.9.2.0/24"]}, R("subnet_hits", 30, 30)])
+    assert n == 30 and len(ips) == 30
+    n, _ = wk([{"field": "ip", "op": "cidr", "values": ["45.9.2.0/24"]}, R("subnet_hits", 31)])
+    assert n == 0
+    # conditia se calculeaza pe selectia de PANA la ea: dupa URL /x -> scannerul are 40/40 = 100% 4xx? nu, 36/40
+    n, _ = wk([{"field": "path_only", "op": "prefix", "values": ["/x"]}, R("ip_err", 91)])
+    assert n == 0
+    st, au = call(app.api_automation, dataset_id=did)
+    assert st == 200, au
+    cat = {c["key"]: c for c in au["categories"]}
+    assert cat["bursts"]["requests"] == 70 and cat["bursts"]["top"][0]["ip"] == "45.9.1.10"
+    assert cat["auto_scan"]["ips"] >= 1 and any(t["ip"] == "45.9.1.20" for t in cat["auto_scan"]["top"])
+    assert cat["ua_rotation"]["top"][0]["ip"] == "45.9.1.30"
+    assert cat["vuln_scan"]["requests"] >= 1
+    for c in au["categories"]:                            # aceleasi conditii -> aceleasi cifre in Workplace
+        assert wk(c["conds"])[0] == c["requests"], c["key"]
+    # selectia globala (timp) se respecta
+    E = lambda s: int(datetime.strptime(s + " +0300", "%d/%b/%Y:%H:%M:%S %z").timestamp())
+    g = json.dumps({"ts_from": E("13/Oct/2026:04:20:00"), "ts_to": E("13/Oct/2026:04:59:59")})
+    st, au2 = call(app.api_automation, dataset_id=did, gf=g)
+    assert {c["key"]: c for c in au2["categories"]}["bursts"]["requests"] == 0
+    # upload gzip in bucati (gzip multi-membru) == acelasi continut
+    import gzip as _gz
+    st, ini = call(app.api_upload2_init, payload={"filename": "x.log", "total_size": 10, "encoding": "gzip"})
+    up = app.UPLOADS[ini["upload_id"]]
+    assert up["raw_path"].endswith(".gz")
+    raw = ("\n".join(FIXTURE) + "\n").encode()
+    with open(up["raw_path"], "wb") as f:
+        f.write(_gz.compress(raw[:200]) + _gz.compress(raw[200:]))
+    plain = app.decompress_to_plain(up["raw_path"], up["workdir"])
+    assert open(plain, "rb").read() == raw
+    app.UPLOADS.pop(ini["upload_id"], None); shutil.rmtree(up["workdir"], ignore_errors=True)
+    st, v = call(app.api_version)
+    assert v["upload_gzip"] is True
+
+
 if __name__ == "__main__":
     bad = [r for r in RESULTS if r[1]]
     for name, err in RESULTS:

@@ -370,21 +370,16 @@ with sync_playwright() as pw:
         return f"Ctrl+K '{ip}' -> explorer; cererea 1 -> 2 -> 1 cu ] [; Alt+<- inapoi la lista"
     check("paleta de comenzi + navigare intre cereri + inapoi", t_palette_nav, page)
 
-    # 11: investigatie (salvata local, export)
+    # 11: v50 -- rubrica de investigatie (elemente / notite / concluzii) a fost
+    # scoasa; pagina Investigations pastreaza rapoartele, regulile si exportul.
     def t_workspace():
-        ip = page.evaluate("() => XP.cur().value")
-        page.evaluate(f"() => WS.addEntity('ip', {json.dumps(ip)})")
-        page.evaluate("() => XP.openWorkspace()")
-        page.wait_for_selector("#invBody #wsNotes")
-        page.fill("#wsNotes", "verificat brute force")
-        page.wait_for_timeout(700)
-        saved = page.evaluate("() => JSON.parse(localStorage.getItem(WS.key))")
-        assert saved["notes"] == "verificat brute force" and any(i["value"] == ip for i in saved["items"]), saved
-        md = page.evaluate("() => WS.md()")
-        assert ip in md and "verificat brute force" in md
-        assert "DOAR in acest browser" in page.inner_text("#invBody")
-        return f"{len(saved['items'])} element(e), notite salvate in localStorage ({page.evaluate('() => WS.key')[:40]}...)"
-    check("spatiul de investigatie: elemente, notite, export", t_workspace, page)
+        page.click('.pageTabBtn[data-page="investigations"]')
+        page.wait_for_timeout(800)
+        assert page.query_selector("#invBody") is None and page.query_selector("#wsNotes") is None
+        assert page.query_selector('[data-st="ws"]') is None, "butonul Investigatie din bara a ramas"
+        assert page.is_visible("#reportsCard"), "rapoartele lipsesc din Investigations"
+        return "fara elemente/notite/concluzii; rapoarte vizibile"
+    check("Investigations: fara spatiul de investigatie, cu rapoarte", t_workspace, page)
 
     # 12: cronologia de securitate (card Triaj) urmeaza perioada; drag pe grafic = perioada
     def t_security():

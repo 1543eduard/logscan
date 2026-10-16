@@ -41,7 +41,14 @@ FIELDS = {
     "weekday":  ("Zi din saptamana", ("in",)),
     "ip_hits":  ("Cereri / IP in selectie", ("range",)),
     "ip_paths": ("Path-uri unice / IP in selectie", ("range",)),
+    # v50: comportament automat (boti, scanere, scraping) -- calculate tot pe selectie
+    "ip_rpm":   ("Varf cereri / minut / IP", ("range",)),
+    "ip_err":   ("% erori 4xx / IP in selectie", ("range",)),
+    "ip_uas":   ("User-Agent-uri diferite / IP", ("range",)),
+    "subnet_hits": ("Cereri / subnet in selectie", ("range",)),
 }
+# conditiile calculate pe IP (sau subnet) in selectia de pana la ele
+SEL_FIELDS = ("ip_hits", "ip_paths", "ip_rpm", "ip_err", "ip_uas", "subnet_hits")
 UA_CATS = ("Human/Browser", "Legitimate crawler", "AI crawler", "SEO/monitoring", "Social media crawler",
            "Script/tool", "Other crawler/bot", "Suspicious automation", "Unknown/unidentified")
 CRAWLER_STATES = ("verified", "fake", "unverified", "none")
@@ -67,6 +74,52 @@ class QueryError(ValueError):
     pass
 
 
+def _c(field, op, values, not_=False):
+    return {"field": field, "op": op, "values": list(values), "not": not_}
+
+
+# v50: ACTIVITATE AUTOMATA (Security & Triaj) -- categorii de boti / scanari /
+# scraping, definite O DATA aici si rulate cu acelasi motor ca Workplace (un
+# click pe categorie deschide exact aceleasi conditii in Workplace).
+_NOT_VERIFIED = _c("crawler", "in", ["verified"], True)
+AUTOMATION = [
+    ("vuln_scan", "Scanere de vulnerabilități",
+     "Cereri către căi tipice exploit-urilor (phpunit, .env, .git, cgi-bin, vendor, actuator...).",
+     [_c("path_only", "regex", [r"(phpunit|/cgi-bin/|/vendor/|/\.env|/\.git|actuator|/solr/|boaform|hnap1|eval-stdin|/\.aws|wp-config\.php\.|phpinfo)"])]),
+    ("scan_tools", "Unelte de scanare și atac",
+     "User-Agent-ul unei unelte cunoscute: sqlmap, nikto, nuclei, wpscan, zgrab, masscan, gobuster, ffuf...",
+     [_c("ua", "regex", ["sqlmap|nikto|nuclei|zgrab|masscan|nmap|wpscan|acunetix|dirbuster|gobuster|ffuf|wfuzz|httpx|nessus|openvas"])]),
+    ("auto_scan", "Scanare automată (majoritar erori 4xx)",
+     "IP-uri cu cel puțin 30 de cereri, din care peste jumătate primesc 4xx: ghicesc fișiere și rute care nu există.",
+     [_c("ip_err", "range", [50, None]), _c("ip_hits", "range", [30, None]), _NOT_VERIFIED]),
+    ("brute_login", "Brute force pe autentificare",
+     "POST pe wp-login.php / xmlrpc.php, de la IP-uri cu cel puțin 10 astfel de cereri.",
+     [_c("method", "in", ["POST"]), _c("path_only", "suffix", ["wp-login.php", "xmlrpc.php"]), _c("ip_hits", "range", [10, None])]),
+    ("wp_enum", "Enumerare utilizatori WordPress",
+     "?author=N, /wp-json/wp/v2/users, /author/ -- colectarea numelor de cont înaintea unui brute force.",
+     [_c("path", "regex", [r"[?&]author=\d|/wp-json/wp/v2/users|/author/"])]),
+    ("wp_probe", "Scanare plugin-uri / teme WordPress",
+     "Cereri cu 404 către /wp-content/plugins/ sau /themes/: cineva caută componente vulnerabile.",
+     [_c("path_only", "regex", ["^/wp-content/(plugins|themes)/"]), _c("status", "in", ["404"])]),
+    ("scraping", "Scraping (copiere de conținut)",
+     "IP-uri care cer 150+ pagini diferite cu UA de browser, fără assets (img/js/css): un om nu navighează așa.",
+     [_c("ext", "in", ["img", "js", "css", "font", "media"], True), _c("ip_paths", "range", [150, None]),
+      _c("ua_cat", "in", ["Human/Browser"]), _NOT_VERIFIED]),
+    ("bursts", "Rafale rapide (60+ cereri / minut)",
+     "IP-uri care au depășit 60 de cereri într-un singur minut (crawlerele verificate DNS sunt excluse).",
+     [_c("ip_rpm", "range", [60, None]), _NOT_VERIFIED]),
+    ("ua_rotation", "Rotație de User-Agent",
+     "Același IP trimite 5+ User-Agent-uri diferite -- tipic boților care încearcă să pară mai mulți vizitatori.",
+     [_c("ip_uas", "range", [5, None]), _c("ip_hits", "range", [20, None])]),
+    ("fake_bots", "Boți falși (UA de crawler, IP neconfirmat)",
+     "Pretind că sunt Googlebot / Bingbot / etc., dar IP-ul nu aparține motorului (verificare DNS).",
+     [_c("crawler", "in", ["fake"])]),
+    ("scripts", "Scripturi și unelte HTTP",
+     "curl, wget, python-requests, Go, Java etc. cu cel puțin 20 de cereri per IP.",
+     [_c("ua_cat", "in", ["Script/tool", "Suspicious automation"]), _c("ip_hits", "range", [20, None])]),
+]
+
+
 def _lower(s):
     return s.lower() if isinstance(s, str) else str(s).lower()
 
@@ -87,6 +140,7 @@ class Workplace:
         self._ext = None
         self._hour = None
         self._wd = None
+        self._subnet = None
 
     # ------------------------------------------------------------ derivate
     def ua_cat_codes(self):
@@ -127,6 +181,24 @@ class Workplace:
             # 1 ian 1970 = joi (3 in Lu=0)
             self._wd = (((local // 86400) + 3) % 7).astype(np.int8)
         return self._hour, self._wd
+
+    def subnet_codes(self):
+        """IP -> cod de subnet (/24 IPv4, /64 IPv6), calculat o data pe IP-urile unice."""
+        if self._subnet is None:
+            d = {}
+            codes = np.zeros(len(self.s.v_ip), np.int64)
+            for i, v in enumerate(self.s.v_ip):
+                v = v or ""
+                if ":" in v:
+                    k = ":".join(v.split(":")[:4])
+                else:
+                    k = v.rsplit(".", 1)[0]
+                c = d.get(k)
+                if c is None:
+                    c = d[k] = len(d)
+                codes[i] = c
+            self._subnet = (codes, len(d))
+        return self._subnet
 
     # ------------------------------------------------------------ LUT text
     def _text_lut(self, field, op, needle):
@@ -291,13 +363,38 @@ class Workplace:
             _, wd = self.hours()
             want = [WEEKDAYS.index(v) for v in map(str, vals) if v in WEEKDAYS]
             return np.isin(wd, want)
-        if field in ("ip_hits", "ip_paths"):
+        if field in SEL_FIELDS:
             idx = np.arange(n) if base is None else np.flatnonzero(base)
+            nip = len(s.v_ip)
+            ipi = s.ip[idx].astype(np.int64)
+            if field == "subnet_hits":
+                sub, nsub = self.subnet_codes()
+                per = np.bincount(sub[ipi], minlength=nsub)
+                return _in_range(per, lo, hi)[sub[s.ip]]
             if field == "ip_hits":
-                per = np.bincount(s.ip[idx], minlength=len(s.v_ip))
-            else:
-                key = np.unique(s.ip[idx].astype(np.int64) * (len(s.v_po) + 1) + s.po[idx])
-                per = np.bincount((key // (len(s.v_po) + 1)).astype(np.int64), minlength=len(s.v_ip))
+                per = np.bincount(ipi, minlength=nip)
+            elif field == "ip_paths":
+                key = np.unique(ipi * (len(s.v_po) + 1) + s.po[idx])
+                per = np.bincount((key // (len(s.v_po) + 1)).astype(np.int64), minlength=nip)
+            elif field == "ip_uas":
+                nua = len(s.v_ua) + 1
+                key = np.unique(ipi * nua + s.ua[idx].astype(np.int64))
+                per = np.bincount((key // nua).astype(np.int64), minlength=nip)
+            elif field == "ip_rpm":
+                if idx.size == 0:
+                    return np.zeros(n, bool)
+                mins = (s.ts[idx] // 60).astype(np.int64)
+                mins -= int(mins.min())
+                span = int(mins.max()) + 1
+                key, cnt = np.unique(ipi * span + mins, return_counts=True)
+                per = np.zeros(nip, np.int64)
+                np.maximum.at(per, (key // span).astype(np.int64), cnt)
+            else:   # ip_err: procentul de raspunsuri 4xx din cererile IP-ului
+                tot = np.bincount(ipi, minlength=nip)
+                e4 = np.bincount(ipi, weights=((s.st[idx] >= 400) & (s.st[idx] < 500)), minlength=nip)
+                per = np.where(tot > 0, e4 * 100.0 / np.maximum(tot, 1), -1)
+                ok = _in_range(per, lo, hi) & (tot > 0)
+                return ok[s.ip]
             ok = _in_range(per, lo, hi)
             return ok[s.ip]
         raise QueryError(f"camp neimplementat: {field}")
@@ -322,7 +419,7 @@ class Workplace:
                 continue
             if c.get("not"):
                 cm = ~cm
-            alone = int(np.count_nonzero(cm if m is None or c.get("field") in ("ip_hits", "ip_paths")
+            alone = int(np.count_nonzero(cm if m is None or c.get("field") in SEL_FIELDS
                                          else cm & _period(s, q)))
             m = cm if m is None else (m & cm)
             funnel.append({"i": i, "alone": alone, "after": int(np.count_nonzero(m))})
@@ -355,6 +452,29 @@ class Workplace:
         res["rows"] = self.rows(page, raw_path, ctx)
         res["limit"], res["offset"] = limit, offset
         return res
+
+    def automation(self, ts_from, ts_to, ctx, top_n=5):
+        """Categoriile AUTOMATION pe perioada data: cereri, IP-uri, top IP-uri."""
+        s = self.s
+        out = []
+        for key, title, desc, conds in AUTOMATION:
+            q = {"ts_from": ts_from, "ts_to": ts_to, "conds": conds}
+            m, _, _ = self.build(q, ctx)
+            idx = np.arange(s.n) if m is None else np.flatnonzero(m)
+            item = {"key": key, "title": title, "desc": desc, "conds": conds,
+                    "requests": int(idx.size), "ips": 0, "top": []}
+            if idx.size:
+                c = np.bincount(s.ip[idx], minlength=len(s.v_ip))
+                nz = np.flatnonzero(c)
+                item["ips"] = int(nz.size)
+                nz = nz[np.argsort(-c[nz], kind="stable")][:top_n]
+                cc_of = getattr(s, "ip_cc", None)
+                item["top"] = [{"ip": s.v_ip[j], "n": int(c[j]),
+                                "country": (s.v_cc[int(cc_of[j])] if cc_of is not None and cc_of[j] >= 0 else "") or "??"}
+                               for j in nz.tolist()]
+                item["ts_min"], item["ts_max"] = int(s.ts[idx].min()), int(s.ts[idx].max())
+            out.append(item)
+        return out
 
     def facets(self, idx, k, ctx):
         s = self.s

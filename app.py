@@ -5244,7 +5244,7 @@ def index():
     return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
-LOGSCAN_VERSION = "49.1"
+LOGSCAN_VERSION = "50.0"
 _STATIC_FONTS = os.path.join(APP_DIR, "static", "fonts")
 
 
@@ -5259,10 +5259,26 @@ def static_font(name: str):
     return FileResponse(path, media_type="font/woff2", headers={"Cache-Control": "public, max-age=604800"})
 
 
+_STATIC_FLAGS = os.path.join(APP_DIR, "static", "flags")
+
+
+@app.get("/static/flags/{name}")
+def static_flag(name: str):
+    """v50: steagurile tarilor (flag-icons, licenta MIT) -- servite local, fara CDN."""
+    if not re.fullmatch(r"[a-z]{2}\.svg", name):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    path = os.path.join(_STATIC_FLAGS, name)
+    if not os.path.isfile(path):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(path, media_type="image/svg+xml",
+                        headers={"Cache-Control": "public, max-age=604800", "X-Content-Type-Options": "nosniff"})
+
+
 @app.get("/api/version")
 def api_version():
     """Versiunea care ruleaza (verificare rapida dupa instalare)."""
-    return JSONResponse({"version": LOGSCAN_VERSION, "columnar": bool(getattr(triage_columnar, "AVAILABLE", False))})
+    return JSONResponse({"version": LOGSCAN_VERSION, "columnar": bool(getattr(triage_columnar, "AVAILABLE", False)),
+                         "upload_gzip": True})
 
 
 @app.post("/api/upload")
@@ -7279,6 +7295,11 @@ def api_upload2_init(payload: dict):
     upload_id = uuid.uuid4().hex
     workdir = tempfile.mkdtemp(prefix="logscan_ds_")
     safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", filename) or "upload.log"
+    # v50: browserul comprima bucatile cu gzip inainte de trimitere (logurile
+    # scad de ~10 ori) -- fisierul primit e atunci un gzip multi-membru, pe
+    # care decompress_to_plain il recunoaste dupa extensie.
+    if (payload or {}).get("encoding") == "gzip" and not safe_name.lower().endswith(".gz"):
+        safe_name += ".gz"
     raw_path = os.path.join(workdir, "incoming_" + safe_name)
     open(raw_path, "wb").close()
     with UPLOADS_LOCK:
@@ -8710,6 +8731,25 @@ def api_workplace(dataset_id: str, body: dict = Body(...)):
         return JSONResponse({"error": f"Filtru invalid: {e}"}, status_code=400)
     res["elapsed_ms"] = int((time.time() - t) * 1000)
     return JSONResponse(res)
+
+
+@app.get("/api/dataset/{dataset_id}/automation")
+def api_automation(dataset_id: str, gf: str = Query(default="")):
+    """v50: activitate automata (boti, scanari, scraping) pe perioada selectiei
+    globale -- aceleasi conditii ca preseturile din Workplace."""
+    ds, wp, err = _workplace_for(dataset_id)
+    if err:
+        return err
+    f, err = _gf_checked(gf_raw=gf)
+    if err:
+        return err
+    t = time.time()
+    try:
+        cats = wp.automation(f.get("ts_from"), f.get("ts_to"), _workplace_ctx(dataset_id))
+    except (workplace.QueryError, TypeError, ValueError) as e:
+        return JSONResponse({"error": f"Calcul esuat: {e}"}, status_code=400)
+    return JSONResponse({"categories": cats, "ts_from": f.get("ts_from"), "ts_to": f.get("ts_to"),
+                         "elapsed_ms": int((time.time() - t) * 1000)})
 
 
 @app.post("/api/dataset/{dataset_id}/workplace/raw")
