@@ -2286,7 +2286,7 @@
             <option value="short">Sablon: fraze scurte (atac filtre)</option>
           </select>
         </label>
-        <label>Domeniu (optional): <input type="text" id="reportDomain" placeholder="ex: carryvan.respotrailers.ro" style="width:220px"></label>
+        <label>Domeniu (optional): <input type="text" id="reportDomain" placeholder="ex: magazin.exemplu.ro" style="width:220px"></label>
         <button id="reportRegenBtn" class="ghost">&#8635; Regenereaza</button>
         <button id="reportCopyBtn" class="ghost">&#128203; Copiaza</button>
       </div>
@@ -5514,7 +5514,7 @@ function _reportDomainLabel(domain) {
 }
 
 // --- Tip 1: Raport de atac (tehnic) -- formatul cerut de Eduard, ca exemplul
-// lui pentru carryvan.respotrailers.ro: total/IP-uri, path+parametri
+// lui pentru magazin.exemplu.ro: total/IP-uri, path+parametri
 // atacati, bursturi, wp-cron, recomandare de mitigare la final.
 function _reportAttack(s, domain) {
   const lbl = _reportDomainLabel(domain);

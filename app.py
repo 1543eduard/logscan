@@ -927,7 +927,7 @@ def parse_line_fast(line):
     if '\\"' in line:
         # Apache scapa ghilimelele din campuri ca \" (ex. un UA trimis de
         # client chiar cu ghilimele: "\"Mozilla/5.0 ...\"") -- 6 linii in
-        # logul real ariesul.ro. Varianta rapida de mai jos taia UA-ul la
+        # un log real. Varianta rapida de mai jos taia UA-ul la
         # prima ghilimea scapata; aici citim campurile tinand cont de escape.
         return _parse_line_escaped(line)
     q1 = line.find('"')
@@ -1362,7 +1362,7 @@ _CRAWLER_KNOWN_NETS = {
 # traficului).
 _CRAWLER_CLAIM_NEEDLES = [n for _i, needles, _p in CRAWLER_IDENTITY_CATALOG for n in needles]
 CRAWLER_CLAIM_QUICK_RE = re.compile("|".join(re.escape(n) for n in _CRAWLER_CLAIM_NEEDLES), re.IGNORECASE)
-# PERF (v43.2, masurat pe logul real ariesul.ro, 300k linii): un regex
+# PERF (v43.2, masurat pe un log real, 300k linii): un regex
 # re.IGNORECASE peste o alternanta de literali e de ~5.5x mai lent decat
 # acelasi regex case-sensitive aplicat pe UA deja lowercase (5.38s vs 0.97s).
 # Semantica identica: needles sunt ASCII, deci lower() pe ambele parti
@@ -1589,7 +1589,7 @@ QP_FUNCTIONAL_EXACT = frozenset((
 # parametru normal de cautare ca sa il marcam singur drept suspect).
 QP_SUSPICIOUS_KEY_EXACT = frozenset(("add_to_wishlist", "min_price", "max_price", "filtru", "filtre"))
 # "filtr" (fara "e"/"_"/"u" dupa) prinde si varianta romaneasca de navigare
-# fatetata (ex: roinstalatii.ro foloseste "?filtru=..." nu "?filter_...=...")
+# fatetata (ex: un magazin real foloseste "?filtru=..." nu "?filter_...=...")
 # pe langa engleza "filter_" -- vazut in productie, nu doar teoretic.
 QP_SUSPICIOUS_KEY_PREFIXES = ("filter_", "filtr")
 # Nume de parametru care AU forma unei incercari de injectie/traversal/
@@ -1739,7 +1739,7 @@ def _process_chunk(args):
                       f"VALUES ({','.join(['?'] * len(triage_engine.COLUMNS))})")
         if triage_columnar.AVAILABLE:
             _colc = triage_columnar.ChunkCollector()
-    # Memo per worker -- cardinalitate mica pe loguri reale (ariesul.ro:
+    # Memo per worker -- cardinalitate mica pe loguri reale (log real:
     # ~3.3k IP-uri si ~330 UA-uri unice la 2.65M linii), deci un lookup in
     # dict inlocuieste un geoip/regex per linie (masurat: geoip 1.31s ->
     # 0.06s la 300k linii).
@@ -3652,7 +3652,7 @@ def build_summary(merged, days_all=None):
     # acelasi Counter folosit si pentru unique_paths mai sus) -- cost marginal,
     # NU o trecere noua prin log. Pentru fiecare prefix, numaram cate cereri
     # au EXACT N segmente sub el, apoi transformam in cumulativ ("cel putin
-    # N segmente") -- daca site-ul e flat (fara "/" intern, ex: roinstalatii.ro
+    # N segmente") -- daca site-ul e flat (fara "/" intern, ex: un magazin real
     # gen slug-c75-p1), toate cererile cad la adancime 1 si nivelurile 2+
     # ies onest 0, fara sa inventam o structura care nu exista.
     # IMPORTANT: folosim EXACT aceeasi formula de prefix ca path_prefix_counter
@@ -3757,7 +3757,7 @@ def build_summary(merged, days_all=None):
     # path de baza. Bursturile sunt SARITE intentionat aici (un burst poate
     # atinge multe path-uri diferite, "path-ul dominant" nu e ieftin de
     # calculat fara o trecere noua) -- (a)+(b) acopera deja exact exemplul
-    # lui Eduard, verificat impotriva /tmp/roinstalatii_test.log.
+    # lui Eduard, verificat pe un log de test.
     _signal_sources = []  # listă de (base_path, "descriere scurta a regulii care a prins-o")
     for _pa in param_abuse:
         _base = _pa["pattern"].split("?", 1)[0]

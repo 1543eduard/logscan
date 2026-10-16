@@ -48,6 +48,6 @@ severitate / action_type / label din indexul columnar).
 - Nou: `test_incidente_si_traseu_ip` -- ip_trail intoarce toate cererile
   fiecarui IP, crescator, cu linia bruta identica cu fisierul; /incidents
   contine toate IP-urile cu CRITICAL/HIGH. Total: 32/32.
-- Verificat in browser pe logul real ariesul.ro (2.653.601 linii): 67 IP-uri,
+- Verificat in browser pe un log real (2.653.601 linii): 67 IP-uri,
   tabel ~1 s, detaliu IP 0,1 s, descarcare = toate liniile IP-ului, filtrul
   tara=RO reincarca lista (67 -> 5), zero erori JS.

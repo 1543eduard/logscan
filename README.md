@@ -6,8 +6,16 @@ Analiză pentru jurnalele de acces Apache / LiteSpeed (Raw Access din cPanel): t
 
 Cerințe: Python 3.11 sau mai nou (cerut de numpy 2.x) și git. `install.sh` îl găsește singur dacă există (`python3.11`, `python3.12`...); pe AlmaLinux / CentOS 8, unde `python3` e 3.6, instalează-l cu `dnf install python3.11`.
 
+Pe un server (ca root), totul dintr-o comandă -- descarcă, instalează și pornește; după asta aplicația se pornește cu `logscan`:
+
 ```bash
-git clone git@github.com:1543eduard/logscan.git
+git clone https://github.com/1543eduard/logscan.git /opt/logscan && /opt/logscan/install.sh --link && logscan
+```
+
+Pas cu pas:
+
+```bash
+git clone https://github.com/1543eduard/logscan.git
 cd logscan
 ./install.sh            # o singură dată: creează venv/ și instalează dependențele
 bin/logscan             # pornește pe un port aleator și afișează adresa
@@ -43,7 +51,7 @@ Exemplu, pe laptop: `LOGSCAN_HOST=127.0.0.1 LOGSCAN_MAXTIME=0 bin/logscan`
 ## Windows
 
 ```bat
-git clone git@github.com:1543eduard/logscan.git
+git clone https://github.com/1543eduard/logscan.git
 cd logscan
 py -3.11 -m venv venv
 venv\Scripts\pip install -r requirements.txt
