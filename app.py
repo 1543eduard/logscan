@@ -6553,28 +6553,27 @@ def api_ip_overview(dataset_id: str, day: str = Query(default=""),
     ds = _get_dataset(dataset_id)
     if not ds:
         return JSONResponse({"error": "Dataset expirat sau inexistent."}, status_code=404)
-    gf_raw = gf
-    gf, err = _gf_checked(None, None, country, severity, status, action, ip, method, path_contains, ua_contains, "",
-                          gf_raw=gf_raw)
+    f, err = _gf_checked(None, None, country, severity, status, action, ip, method, path_contains, ua_contains, "",
+                         gf_raw=gf)
     if err:
         return err
     subset = None
-    if not _gf_is_empty(gf):
+    if not _gf_is_empty(f):
         if not ds.get("triage_ready"):
             return JSONResponse({"error": "Filtrele globale devin aplicabile aici dupa indexare (cateva secunde).",
                                  "indexing": True}, status_code=202)
-        subset = _subset_for_filters(ds, gf)
+        subset = _subset_for_filters(ds, f)
     day_filter = day or None
     start_sec = _parse_hms_seconds(start)
     end_sec = _parse_hms_seconds(end)
     t0 = time.time()
     m, cached = _ip_overview_merged(dataset_id, ds, day_filter, start_sec, end_sec,
-                                    subset=subset, gf_key=_gf_key(gf) if subset else "")
+                                    subset=subset, gf_key=_gf_key(f) if subset else "")
     resp = _build_ip_overview_response(dataset_id, m, day_filter, start, end, start_sec, end_sec)
     resp["cached"] = cached
-    resp["global_filters"] = json.loads(_gf_key(gf)) if subset else {}
-    if subset and (gf.get("ts_from") is not None or gf.get("ts_to") is not None) and not day_filter and not start:
-        resp["label"] = _gf_label({"ts_from": gf.get("ts_from"), "ts_to": gf.get("ts_to")}, ds)
+    resp["global_filters"] = json.loads(_gf_key(f)) if subset else {}
+    if subset and (f.get("ts_from") is not None or f.get("ts_to") is not None) and not day_filter and not start:
+        resp["label"] = _gf_label({"ts_from": f.get("ts_from"), "ts_to": f.get("ts_to")}, ds)
     resp["elapsed_sec"] = round(time.time() - t0, 2)
     doms = {extract_domain_from_filename(fn) for fn in (ds.get("source_files") or [ds.get("filename", "")])}
     doms.discard(None); doms.discard("")
