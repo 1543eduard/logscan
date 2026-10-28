@@ -1,6 +1,6 @@
 # logscan
 
-Analiză pentru jurnalele de acces Apache / LiteSpeed (Raw Access din cPanel): trafic, țări, atacuri, boți, scraping, reguli de blocare. Rulează complet local; logurile nu sunt trimise nicăieri (GeoIP și baza de furnizori sunt incluse în repo). Singurul apel extern e al lansatorului `bin/logscan`, care întreabă `ifconfig.me` ca să-ți afișeze IP-ul public al serverului (nu și cu `LOGSCAN_HOST=127.0.0.1`).
+Analiză pentru jurnalele de acces Apache / LiteSpeed (Raw Access din cPanel): trafic, țări, atacuri, boți, scraping, reguli de blocare. Rulează complet local și efemer: logurile nu sunt trimise nicăieri, iar datele temporare se șterg la oprirea procesului. Implicit aplicația ascultă doar pe `127.0.0.1` și este în modul offline (fără Wordfence/DNS extern). Singurele apeluri externe posibile (feed Wordfence și verificarea DNS a crawlerelor) sunt oprite implicit și se activează doar cu `LOGSCAN_OFFLINE=0`.
 
 ## Pornire rapidă
 
@@ -44,15 +44,23 @@ Atât: `bin/logscan` (și `logscan`, dacă ai folosit `--link`) pornește direct
 
 | Variabilă | Implicit | Ce face |
 |---|---|---|
-| `LOGSCAN_HOST` | `0.0.0.0` | Adresa pe care ascultă. Pe calculatorul propriu folosește `127.0.0.1`, ca aplicația să nu fie accesibilă din rețea. |
+| `LOGSCAN_HOST` | `127.0.0.1` | Adresa pe care ascultă. Pentru acces din LAN setează explicit `0.0.0.0` și adaugă hostul în `LOGSCAN_ALLOWED_HOSTS`. |
 | `LOGSCAN_PORT` | aleator | Port fix. |
 | `LOGSCAN_PORT_MIN` / `LOGSCAN_PORT_MAX` | `21000` / `21099` | Intervalul portului aleator (pe serverul cPanel e intervalul deschis în CSF). |
-| `LOGSCAN_MAXTIME` | `2h` | Oprire automată (`0` = fără limită). |
+| `LOGSCAN_MAXTIME` | `0` | Oprire automată opțională (`0` = fără limită; oprirea se face cu Ctrl+C). |
 | `LOGSCAN_MAX_WORKERS` | după CPU | Numărul maxim de procese de parsare (detectat automat, inclusiv cota de CPU a containerului). |
+| `LOGSCAN_OFFLINE` | `1` | `1` = fără Wordfence/DNS extern; `0` permite feed-ul Wordfence și verificarea DNS. |
+| `LOGSCAN_ALLOWED_HOSTS` | gol | Hosturi suplimentare acceptate, separate prin virgulă (necesar doar pentru LAN/revers proxy). |
+| `LOGSCAN_MAX_UPLOAD_MB` | `8192` | Limita fișierului (și a conținutului decomprimat). |
+| `LOGSCAN_MAX_ACTIVE_DATASETS` | `32` | Numărul maxim de analize păstrate simultan în memorie. |
+| `LOGSCAN_MAX_RSS_MB` | auto (70% RAM) | Bugetul de memorie pentru preflight-ul de indexare; `0` = auto. |
+| `LOGSCAN_WORK_ROOT` | temp sistem | Directorul workdir-urilor; `/dev/shm/logscan` ține datele în RAM. |
 
 Exemplu, pe laptop: `LOGSCAN_HOST=127.0.0.1 LOGSCAN_MAXTIME=0 bin/logscan`
 
-**Atenție:** aplicația nu are autentificare. Pe un server, oricine ajunge la port vede datele încărcate; de aceea portul e aleator și aplicația se oprește singură.
+Dacă pornești cu `LOGSCAN_HOST=0.0.0.0`, `bin/logscan` adaugă automat IP-ul local și numele hostului în lista acceptată. Pentru un revers proxy sau un domeniu, adaugă-le explicit în `LOGSCAN_ALLOWED_HOSTS`.
+
+**Atenție:** aplicația nu are autentificare. Implicit ascultă doar pe loopback, validează headerul Host și nu expune documentația OpenAPI. Dacă o deschizi în LAN, fă-o conștient și limitează accesul prin firewall/revers proxy cu autentificare.
 
 ## Windows
 
@@ -73,15 +81,15 @@ Apoi deschide `http://127.0.0.1:8080`.
 - **Security & Triaj**: incidente, atac pe filtre (PrestaShop / WooCommerce), activitate automată (scanere, brute force, scraping, rafale, boți falși).
 - **IP Explorer**: IP-uri, subrețele, furnizori (ASN), IP-urile unice grupate pe rețele; profil complet al fiecărui IP în panoul lateral.
 - **Workplace**: filtrare liberă cu condiții (inclusiv comportament per IP), preseturi și ghid cu exemple.
-- **Raw Logs**: liniile originale, copiere / export.
-- Bara de sus: perioada (tragere pe mini-grafic), filtrele active, **Compară perioade**, **Copiază link** (linkul deschide exact același ecran cât timp aplicația rulează).
+- **Raw Logs**: liniile originale, copiere / export, **Live 10s** pentru reîmprospătarea automată a ecranului curent.
+- Bara de sus: perioada (tragere pe mini-grafic), filtrele active, **Compară perioade**, **Redactează** (pseudonimizează IP-urile la export/copiere), **Live 10s**, **Copiază link** (linkul deschide exact același ecran cât timp aplicația rulează).
 
 Lista completă a schimbărilor: fișierele `SCHIMBARI_v*.md`.
 
 ## Teste
 
 ```bash
-venv/bin/python tests/test_logscan.py                         # teste unitare
+venv/bin/python tests/test_logscan.py                         # 46 teste unitare (inclusiv redact/share și asset-uri statice)
 venv/bin/python app.py --port 8092 &                          # teste de interfață (necesită playwright)
 venv/bin/python tests/ui_v51.py http://127.0.0.1:8092 /cale/log.log
 ```

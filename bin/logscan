@@ -1,21 +1,24 @@
 #!/bin/bash
 # logscan -- porneste aplicatia pe un port aleator si afiseaza adresa.
-# Se opreste singura dupa LOGSCAN_MAXTIME (implicit 2h) sau cu Ctrl+C.
+# Se opreste cu Ctrl+C (sau cu LOGSCAN_MAXTIME, daca este setat explicit).
 #
 # Setari (variabile de mediu, toate optionale):
-#   LOGSCAN_HOST      adresa pe care asculta (implicit 0.0.0.0; pe calculatorul
-#                     propriu pune 127.0.0.1 ca sa nu fie accesibila din retea)
+#   LOGSCAN_HOST      adresa pe care asculta (implicit 127.0.0.1; pentru LAN
+#                     seteaza explicit 0.0.0.0 si LOGSCAN_ALLOWED_HOSTS)
 #   LOGSCAN_PORT      port fix (implicit: aleator intre PORT_MIN si PORT_MAX)
 #   LOGSCAN_PORT_MIN / LOGSCAN_PORT_MAX   intervalul (implicit 21000-21099,
 #                     intervalul deschis in CSF pe serverul cPanel)
-#   LOGSCAN_MAXTIME   durata maxima (implicit 2h; 0 = fara limita)
+#   LOGSCAN_MAXTIME   durata maxima optionala (implicit 0 = fara limita)
+#   LOGSCAN_OFFLINE   1 = fara Wordfence/DNS extern (implicit 1)
+#   LOGSCAN_MAX_RSS_MB  bugetul de memorie pentru indexare (0 = 70% RAM)
+#   LOGSCAN_WORK_ROOT  directorul datelor temporare (ex. /dev/shm/logscan)
 set -e
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 APP_DIR="$(cd "$(dirname "$SELF")/.." && pwd)"
-HOST="${LOGSCAN_HOST:-0.0.0.0}"
+HOST="${LOGSCAN_HOST:-127.0.0.1}"
 PORT_MIN="${LOGSCAN_PORT_MIN:-21000}"
 PORT_MAX="${LOGSCAN_PORT_MAX:-21099}"
-MAXTIME="${LOGSCAN_MAXTIME:-2h}"
+MAXTIME="${LOGSCAN_MAXTIME:-0}"
 PORT="${LOGSCAN_PORT:-$(( ( RANDOM % (PORT_MAX - PORT_MIN + 1) ) + PORT_MIN ))}"
 
 if [ ! -x "$APP_DIR/venv/bin/python" ]; then
@@ -27,9 +30,17 @@ fi
 if [ "$HOST" = "127.0.0.1" ] || [ "$HOST" = "localhost" ]; then
     SHOW="127.0.0.1"
 else
-    SHOW=$(curl -s -4 -m 3 ifconfig.me 2>/dev/null || true)
-    [ -n "$SHOW" ] || SHOW=$(hostname -I 2>/dev/null | awk '{print $1}')
+    # Fara ifconfig.me: aplicatia trebuie sa ramana strict locala.
+    SHOW=$(hostname -I 2>/dev/null | awk '{print $1}')
     [ -n "$SHOW" ] || SHOW="$HOST"
+    # Daca a fost aleasa explicit o adresa non-loopback, acceptam hostul
+    # respectiv (altfel validarea anti-DNS-rebinding ar refuza accesul).
+    if [ -z "${LOGSCAN_ALLOWED_HOSTS:-}" ]; then
+        HN=$(hostname 2>/dev/null || true)
+        LOGSCAN_ALLOWED_HOSTS="$HOST,$SHOW"
+        [ -n "$HN" ] && LOGSCAN_ALLOWED_HOSTS="$LOGSCAN_ALLOWED_HOSTS,$HN"
+        export LOGSCAN_ALLOWED_HOSTS
+    fi
 fi
 
 echo "=================================================="
