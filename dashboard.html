@@ -12261,6 +12261,185 @@ window.ATTACK_TIMELINE = {
   }
 };
 
+// FEATURE 11: REPEAT OFFENDERS (DATA-AWARE)
+window.REPEAT_OFFENDERS = {
+  show: function() {
+    const criticalElements = document.querySelectorAll('[data-ip][data-severity="CRITICAL"]');
+    const ipMap = new Map();
+
+    criticalElements.forEach(el => {
+      const ip = el.dataset.ip;
+      ipMap.set(ip, (ipMap.get(ip) || 0) + 1);
+    });
+
+    if (ipMap.size === 0) {
+      alert('No repeat offenders. ✅ Clean log!');
+      return;
+    }
+
+    const sorted = Array.from(ipMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15);
+
+    let msg = `🔴 REPEAT OFFENDERS (Top ${sorted.length})\n\n`;
+    msg += `IPs with multiple CRITICAL incidents:\n\n`;
+
+    sorted.forEach((entry, i) => {
+      msg += `${i+1}. ${entry[0]}\n`;
+      msg += `   └─ ${entry[1]} incidents\n`;
+    });
+
+    msg += `\n⚡ Action: Block these IPs immediately`;
+    alert(msg);
+  }
+};
+
+// FEATURE 12: ENDPOINT RISK ANALYSIS (DATA-AWARE)
+window.ENDPOINT_RISK = {
+  show: function() {
+    const findings = document.querySelectorAll('[data-severity]');
+    const pathMap = new Map();
+
+    findings.forEach(el => {
+      const path = el.dataset.path || 'unknown';
+      const severity = el.dataset.severity;
+      pathMap.set(path, (pathMap.get(path) || 0) + (severity === 'CRITICAL' ? 3 : severity === 'HIGH' ? 2 : 1));
+    });
+
+    if (pathMap.size === 0) {
+      alert('No endpoint risks detected. ✅');
+      return;
+    }
+
+    const sorted = Array.from(pathMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    let msg = `🎯 ENDPOINT RISK ANALYSIS\n\n`;
+    msg += `Top ${sorted.length} endpoints under attack:\n\n`;
+
+    sorted.forEach((entry, i) => {
+      const riskLevel = entry[1] > 20 ? '🔴 CRITICAL' : entry[1] > 10 ? '🟠 HIGH' : '🟡 MEDIUM';
+      msg += `${i+1}. ${riskLevel}\n`;
+      msg += `   ${entry[0]}\n`;
+      msg += `   Risk score: ${entry[1]}\n\n`;
+    });
+
+    alert(msg);
+  }
+};
+
+// FEATURE 13: HTTP STATUS BREAKDOWN (DATA-AWARE)
+window.STATUS_BREAKDOWN = {
+  show: function() {
+    const statusElements = document.querySelectorAll('[data-status]');
+    const statusMap = new Map();
+
+    statusElements.forEach(el => {
+      const status = el.dataset.status;
+      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+    });
+
+    if (statusMap.size === 0) {
+      alert('No HTTP status data found.');
+      return;
+    }
+
+    let msg = `📊 HTTP STATUS BREAKDOWN\n\n`;
+    const total = statusElements.length;
+
+    // Sort by status code
+    Array.from(statusMap.entries())
+      .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+      .forEach(entry => {
+        const status = entry[0];
+        const count = entry[1];
+        const pct = ((count / total) * 100).toFixed(1);
+        const icon = status.startsWith('2') ? '✅' : status.startsWith('3') ? 'ℹ️ ' : status.startsWith('4') ? '⚠️ ' : '🔴';
+        msg += `${icon} ${status}: ${count} (${pct}%)\n`;
+      });
+
+    msg += `\nTotal requests: ${total}`;
+    alert(msg);
+  }
+};
+
+// FEATURE 14: COUNTRY HEATMAP (DATA-AWARE)
+window.COUNTRY_HEATMAP = {
+  show: function() {
+    const countryElements = document.querySelectorAll('[data-country]');
+    const countryMap = new Map();
+
+    countryElements.forEach(el => {
+      const country = el.dataset.country || 'Unknown';
+      countryMap.set(country, (countryMap.get(country) || 0) + 1);
+    });
+
+    if (countryMap.size === 0) {
+      alert('No geolocation data available.');
+      return;
+    }
+
+    const sorted = Array.from(countryMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15);
+
+    let msg = `🌍 TOP COUNTRIES BY TRAFFIC\n\n`;
+    const total = countryElements.length;
+
+    sorted.forEach((entry, i) => {
+      const country = entry[0];
+      const count = entry[1];
+      const pct = ((count / total) * 100).toFixed(1);
+      const bar = '█'.repeat(Math.ceil(pct / 5));
+      msg += `${i+1}. ${country.padEnd(15)} ${count.toString().padStart(5)} (${pct.padStart(5)}%) ${bar}\n`;
+    });
+
+    alert(msg);
+  }
+};
+
+// FEATURE 15: SUSPICIOUS PATTERNS (DATA-AWARE)
+window.SUSPICIOUS_PATTERNS = {
+  show: function() {
+    const findings = document.querySelectorAll('[data-severity]');
+    const patterns = {
+      'SQL Injection': 0,
+      'Path Traversal': 0,
+      'XSS': 0,
+      'Bot Abuse': 0,
+      'Brute Force': 0,
+      'Suspicious User-Agent': 0
+    };
+
+    findings.forEach(el => {
+      const text = el.textContent.toLowerCase();
+      if (text.includes('sql') || text.includes('union') || text.includes('select')) patterns['SQL Injection']++;
+      if (text.includes('..') || text.includes('%2e%2e') || text.includes('etc/passwd')) patterns['Path Traversal']++;
+      if (text.includes('<script') || text.includes('javascript:') || text.includes('onerror=')) patterns['XSS']++;
+      if (text.includes('bot') || text.includes('crawler') || text.includes('spider')) patterns['Bot Abuse']++;
+      if (text.includes('brute') || text.includes('login') || text.includes('wp-login')) patterns['Brute Force']++;
+      if (text.includes('agent') || text.includes('curl') || text.includes('python')) patterns['Suspicious User-Agent']++;
+    });
+
+    const active = Object.entries(patterns).filter(p => p[1] > 0).sort((a, b) => b[1] - a[1]);
+
+    let msg = `🔍 ATTACK PATTERNS DETECTED\n\n`;
+
+    if (active.length === 0) {
+      msg += 'No suspicious patterns detected. ✅';
+    } else {
+      active.forEach((entry, i) => {
+        const icon = entry[1] > 10 ? '🚨' : entry[1] > 5 ? '⚠️ ' : '📌';
+        msg += `${icon} ${entry[0]}: ${entry[1]} incidents\n`;
+      });
+      msg += '\n💡 Recommendation: Review findings in Security tab';
+    }
+
+    alert(msg);
+  }
+};
+
 // Initialize features on page load
 document.addEventListener('DOMContentLoaded', () => {
   THEME.init();
@@ -12291,6 +12470,11 @@ const initFeatureButtons = () => {
     { text: '🎯 Threat Level', onclick: () => THREAT_LEVEL.show() },
     { text: '📈 Quick Stats', onclick: () => QUICK_STATS.show() },
     { text: '⏱️  Attack Timeline', onclick: () => ATTACK_TIMELINE.show() },
+    { text: '🔴 Repeat Offenders', onclick: () => REPEAT_OFFENDERS.show() },
+    { text: '🎯 Endpoint Risk', onclick: () => ENDPOINT_RISK.show() },
+    { text: '📊 Status Codes', onclick: () => STATUS_BREAKDOWN.show() },
+    { text: '🌍 Countries', onclick: () => COUNTRY_HEATMAP.show() },
+    { text: '🔍 Patterns', onclick: () => SUSPICIOUS_PATTERNS.show() },
     { text: '❓ Help (?)', onclick: () => HELP.show() }
   ];
 
