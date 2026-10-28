@@ -345,16 +345,20 @@
                 const data = await response.json();
                 const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-                // Show success and redirect
-                status.className = 'status show success';
-                status.innerHTML = `✅ Analysis complete in ${duration}s! Redirecting to results...`;
+                // Store dataset_id in localStorage for /rezultate to find
+                if (data.dataset_id) {
+                    localStorage.setItem('logscan_current_dataset', data.dataset_id);
+                    localStorage.setItem('logscan_current_filename', data.filename || 'Log Analysis');
+                }
 
-                // Redirect to results page with dataset ID
+                // Show success and redirect immediately
+                status.className = 'status show success';
+                status.innerHTML = `✅ Analysis complete in ${duration}s! Loading results...`;
+
+                // Redirect to results page immediately
                 setTimeout(() => {
-                    if (data.dataset_id) {
-                        window.location.href = `/rezultate?id=${encodeURIComponent(data.dataset_id)}`;
-                    }
-                }, 1500);
+                    window.location.href = `/rezultate`;
+                }, 500);
 
             } catch (error) {
                 const duration = ((Date.now() - startTime) / 1000).toFixed(1);

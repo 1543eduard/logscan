@@ -13587,37 +13587,36 @@ window.SEVERITY_DISTRIBUTION = {
 
 */
 
-// Auto-load dataset from query parameter (from upload page)
+// Auto-load dataset from localStorage (set by upload.html)
 (function autoLoadDataset() {
-  const params = new URLSearchParams(window.location.search);
-  const datasetId = params.get('id');
+  const datasetId = localStorage.getItem('logscan_current_dataset');
+  const filename = localStorage.getItem('logscan_current_filename');
 
   if (datasetId) {
-    // Try to load the dataset automatically
+    console.log('🔄 Auto-loading dataset:', datasetId);
+
     fetch(`/api/dataset/${encodeURIComponent(datasetId)}/summary`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then(summary => {
-        console.log('✅ Auto-loaded dataset:', datasetId);
-        console.log('Summary:', summary);
-
-        // Extract days from summary structure
+        console.log('✅ Dataset loaded - calling _onUploadSuccess');
         const days = summary.days_available || [];
 
-        // Simulate upload success with loaded data
         _onUploadSuccess({
           dataset_id: datasetId,
-          filename: summary.filename || 'Loaded Dataset',
+          filename: filename || summary.filename || 'Analysis Results',
           summary: summary,
           days: days
         });
+
+        // Clear localStorage after loading
+        localStorage.removeItem('logscan_current_dataset');
+        localStorage.removeItem('logscan_current_filename');
       })
       .catch(err => {
-        console.error('❌ Failed to auto-load:', err);
-        console.log('Dataset ID:', datasetId);
-        // Fall back to upload interface
+        console.error('❌ Failed to load dataset:', err);
       });
   }
 })();
