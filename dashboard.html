@@ -13587,37 +13587,40 @@ window.SEVERITY_DISTRIBUTION = {
 
 */
 
-// Auto-load dataset from localStorage (set by upload.html)
+// Auto-load dataset from URL parameter (from upload.html redirect)
 (function autoLoadDataset() {
-  const datasetId = localStorage.getItem('logscan_current_dataset');
-  const filename = localStorage.getItem('logscan_current_filename');
+  const params = new URLSearchParams(window.location.search);
+  const datasetId = params.get('id');
 
   if (datasetId) {
-    console.log('🔄 Auto-loading dataset:', datasetId);
+    console.log('✅ Loading dataset from URL:', datasetId);
 
     fetch(`/api/dataset/${encodeURIComponent(datasetId)}/summary`)
       .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} - Dataset not found`);
         return r.json();
       })
       .then(summary => {
-        console.log('✅ Dataset loaded - calling _onUploadSuccess');
+        console.log('✅ Dataset loaded successfully!');
         const days = summary.days_available || [];
 
         _onUploadSuccess({
           dataset_id: datasetId,
-          filename: filename || summary.filename || 'Analysis Results',
+          filename: summary.filename || 'Analysis Results',
           summary: summary,
           days: days
         });
-
-        // Clear localStorage after loading
-        localStorage.removeItem('logscan_current_dataset');
-        localStorage.removeItem('logscan_current_filename');
       })
       .catch(err => {
-        console.error('❌ Failed to load dataset:', err);
+        console.error('❌ Failed to load dataset:', err.message);
+        // Redirect back to root if dataset not found
+        setTimeout(() => {
+          window.location.replace('/');
+        }, 2000);
       });
+  } else {
+    console.log('📁 No dataset ID in URL - showing upload interface');
+    // No ID = show upload interface (dashboard fallback)
   }
 })();
 </script>

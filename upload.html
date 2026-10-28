@@ -345,29 +345,19 @@
                 const data = await response.json();
                 const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
-                console.log('✅ Upload successful!');
-                console.log('Dataset ID:', data.dataset_id);
-                console.log('Filename:', data.filename);
-
-                // Store dataset_id in localStorage
-                if (data.dataset_id) {
-                    localStorage.setItem('logscan_current_dataset', data.dataset_id);
-                    localStorage.setItem('logscan_current_filename', data.filename || 'Log Analysis');
-                    console.log('✅ Stored in localStorage');
-                }
-
                 // Show success message
                 status.className = 'status show success';
-                status.innerHTML = `✅ Analysis complete in ${duration}s! Redirecting to full analysis...`;
+                status.innerHTML = `✅ Analysis complete in ${duration}s! Loading full analysis...`;
 
-                // FORCE redirect to /rezultate
-                console.log('🔄 Redirecting to /rezultate...');
-
-                // Try multiple redirect methods for reliability
-                setTimeout(() => {
-                    console.log('Executing redirect...');
-                    window.location.replace('/rezultate');
-                }, 800);
+                // Redirect with dataset_id as URL parameter (SAFE & ATOMIC)
+                if (data.dataset_id) {
+                    console.log('✅ Redirecting to /rezultate with ID:', data.dataset_id);
+                    setTimeout(() => {
+                        window.location.replace('/rezultate?id=' + encodeURIComponent(data.dataset_id));
+                    }, 300);
+                } else {
+                    status.innerHTML = `❌ Error: No dataset ID received`;
+                }
 
             } catch (error) {
                 const duration = ((Date.now() - startTime) / 1000).toFixed(1);
