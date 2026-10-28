@@ -370,6 +370,7 @@
 
         function displayResults(data) {
             const summary = data.summary || data;
+            const datasetId = data.dataset_id;
 
             const items = [
                 { label: 'Total Requests', value: summary.total || 0 },
@@ -388,6 +389,14 @@
                     </div>
                 `)
                 .join('');
+
+            // Update dashboard link to pass dataset_id
+            if (datasetId) {
+                const dashboardLink = resultsGrid.parentElement.querySelector('a[href="/dashboard"]');
+                if (dashboardLink) {
+                    dashboardLink.href = `/dashboard?id=${datasetId}`;
+                }
+            }
 
             results.classList.add('show');
         }
