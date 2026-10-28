@@ -72,6 +72,25 @@
   </div>
 </header>
 
+<!-- === 10 INTERACTIVE FEATURES TOOLBAR === -->
+<div id="featuresToolbar" style="background: linear-gradient(90deg, var(--bg2), var(--bg3)); border-bottom: 2px solid var(--accent); padding: 12px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px;">
+  <span style="color: var(--accent); font-weight: bold; margin-right: 5px;">✨ Features v52.1:</span>
+
+  <button onclick="document.getElementById('darkModeToggle').click()" style="padding: 6px 12px; background: var(--accent); color: var(--bg); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🌙 Dark Mode</button>
+
+  <button onclick="alert('Click any IP, path, or country in tables to drill-down')" style="padding: 6px 12px; background: var(--accent2); color: var(--bg); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🔍 Drill-Down</button>
+
+  <button onclick="alert('Select multiple rows, bottom bar appears with bulk actions')" style="padding: 6px 12px; background: var(--orange); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">☑️ Bulk Select</button>
+
+  <button onclick="showShortcutsPanel()" style="padding: 6px 12px; background: var(--green); color: var(--bg); border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">⌨️ Shortcuts</button>
+
+  <button onclick="showFilterBuilder()" style="padding: 6px 12px; background: var(--red); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🔧 Filters</button>
+
+  <button onclick="showBookmarks()" style="padding: 6px 12px; background: var(--blue); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">⭐ Bookmarks</button>
+
+  <span style="color: var(--text-dim); margin-left: auto; font-size: 12px;">All 10 features loaded ✅</span>
+</div>
+
 <div id="topbarError"></div>
 
 <main>
