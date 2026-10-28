@@ -13600,17 +13600,24 @@ window.SEVERITY_DISTRIBUTION = {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(data => {
+      .then(summary => {
+        console.log('✅ Auto-loaded dataset:', datasetId);
+        console.log('Summary:', summary);
+
+        // Extract days from summary structure
+        const days = summary.days_available || [];
+
         // Simulate upload success with loaded data
         _onUploadSuccess({
           dataset_id: datasetId,
-          filename: data.filename || 'Dataset',
-          summary: data,
-          days: data.days_available || []
+          filename: summary.filename || 'Loaded Dataset',
+          summary: summary,
+          days: days
         });
       })
       .catch(err => {
-        console.warn('Failed to auto-load dataset:', err);
+        console.error('❌ Failed to auto-load:', err);
+        console.log('Dataset ID:', datasetId);
         // Fall back to upload interface
       });
   }
