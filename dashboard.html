@@ -12058,6 +12058,16 @@ window.HELP = {
   • Export current table as CSV
   • All visible data included
 
+🛡️ RECOMMENDED BLOCKS
+  • Shows top IPs to block
+  • Based on security findings
+  • Ready for firewall rules
+
+📈 STATS
+  • Total IPs, Paths, Findings
+  • Summary statistics
+  • Visual breakdown
+
 📖 HELP
   • Press ? to show this menu
   • Check each tab for specific features
@@ -12066,10 +12076,188 @@ window.HELP = {
   1. Upload a log file
   2. Check "Overview" for summary
   3. Review "Security & Triaj" findings
-  4. Use "Workplace" for advanced analysis
-  5. Export findings as needed
+  4. Use "Recommended Blocks" to block IPs
+  5. Use "Workplace" for advanced analysis
+  6. Export findings as needed
     `;
     alert(help);
+  }
+};
+
+// FEATURE 6: RECOMMENDED IPS TO BLOCK (DATA-AWARE ✅)
+window.RECOMMENDED_BLOCKS = {
+  show: function() {
+    const criticalIps = new Map();
+    document.querySelectorAll('[data-ip][data-severity="CRITICAL"]').forEach(el => {
+      const ip = el.dataset.ip;
+      criticalIps.set(ip, (criticalIps.get(ip) || 0) + 1);
+    });
+
+    if (criticalIps.size === 0) {
+      alert('No critical findings - Good job! 🎉\n\nUpload a log with threats to see recommendations.');
+      return;
+    }
+
+    const sorted = Array.from(criticalIps.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    let msg = `🛡️ TOP ${sorted.length} IPs TO BLOCK (by CRITICAL incidents)\n\n`;
+    sorted.forEach((entry, i) => {
+      msg += `${i+1}. ${entry[0]} (${entry[1]} critical events)\n`;
+    });
+    msg += '\n✅ Copy these IPs to your firewall/security tool';
+
+    alert(msg);
+  }
+};
+
+// FEATURE 7: SECURITY SUMMARY (DATA-AWARE ✅)
+window.SECURITY_SUMMARY = {
+  show: function() {
+    const allFindings = document.querySelectorAll('[data-severity]');
+    const critical = Array.from(allFindings).filter(f => f.dataset.severity === 'CRITICAL').length;
+    const high = Array.from(allFindings).filter(f => f.dataset.severity === 'HIGH').length;
+    const medium = Array.from(allFindings).filter(f => f.dataset.severity === 'MEDIUM').length;
+    const uniqueIps = new Set(Array.from(document.querySelectorAll('[data-ip]')).map(e => e.dataset.ip));
+    const uniquePaths = new Set(Array.from(document.querySelectorAll('[data-path]')).map(e => e.dataset.path));
+
+    let msg = '🔒 SECURITY SUMMARY\n\n';
+    msg += '📊 Findings:\n';
+    msg += `  🚨 CRITICAL: ${critical}\n`;
+    msg += `  ⚠️  HIGH: ${high}\n`;
+    msg += `  📌 MEDIUM: ${medium}\n`;
+    msg += `  Total: ${critical + high + medium}\n\n`;
+    msg += '📈 Statistics:\n';
+    msg += `  Unique IPs: ${uniqueIps.size}\n`;
+    msg += `  Unique Paths: ${uniquePaths.size}\n\n`;
+
+    if (critical > 0) {
+      msg += '🚨 ACTION REQUIRED\n';
+      msg += '  • Review Security & Triaj tab\n';
+      msg += '  • Use "Recommended Blocks" for IPs\n';
+    } else if (high > 0) {
+      msg += '⚠️  REVIEW NEEDED\n';
+      msg += '  • Check Workplace tab for details\n';
+    } else {
+      msg += '✅ CLEAN\n';
+      msg += '  • Log appears safe\n';
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 8: THREAT LEVEL INDICATOR (DATA-AWARE ✅)
+window.THREAT_LEVEL = {
+  show: function() {
+    const allFindings = document.querySelectorAll('[data-severity]');
+    const critical = Array.from(allFindings).filter(f => f.dataset.severity === 'CRITICAL').length;
+    const high = Array.from(allFindings).filter(f => f.dataset.severity === 'HIGH').length;
+
+    let level = '✅ LOW';
+    let color = 'green';
+    let recommendation = 'Monitor regularly';
+
+    if (critical >= 5) {
+      level = '🚨 CRITICAL';
+      color = 'red';
+      recommendation = 'IMMEDIATE ACTION REQUIRED - Block IPs immediately!';
+    } else if (critical > 0) {
+      level = '⚠️  SEVERE';
+      color = 'darkorange';
+      recommendation = 'Review and block critical IPs now';
+    } else if (high >= 10) {
+      level = '⚠️  HIGH';
+      color = 'orange';
+      recommendation = 'Review findings, prepare firewall rules';
+    } else if (high > 0) {
+      level = '📌 MEDIUM';
+      color = 'gold';
+      recommendation = 'Monitor and log for future analysis';
+    }
+
+    let msg = `🎯 THREAT LEVEL: ${level}\n\n`;
+    msg += `CRITICAL incidents: ${critical}\n`;
+    msg += `HIGH incidents: ${high}\n\n`;
+    msg += `💡 Recommendation:\n${recommendation}`;
+
+    alert(msg);
+  }
+};
+
+// FEATURE 9: QUICK STATS (DATA-AWARE ✅)
+window.QUICK_STATS = {
+  show: function() {
+    const findings = document.querySelectorAll('[data-severity]');
+    const ips = new Set(Array.from(document.querySelectorAll('[data-ip]')).map(e => e.dataset.ip));
+    const paths = new Set(Array.from(document.querySelectorAll('[data-path]')).map(e => e.dataset.path));
+
+    const critical = Array.from(findings).filter(f => f.dataset.severity === 'CRITICAL').length;
+    const high = Array.from(findings).filter(f => f.dataset.severity === 'HIGH').length;
+    const medium = Array.from(findings).filter(f => f.dataset.severity === 'MEDIUM').length;
+
+    let msg = `📊 QUICK STATS\n\n`;
+    msg += `📈 Coverage:\n`;
+    msg += `  IPs analyzed: ${ips.size}\n`;
+    msg += `  Paths checked: ${paths.size}\n`;
+    msg += `  Total findings: ${findings.length}\n\n`;
+    msg += `🎯 Breakdown:\n`;
+    msg += `  🚨 CRITICAL: ${critical} (${findings.length > 0 ? ((critical/findings.length)*100).toFixed(1) : 0}%)\n`;
+    msg += `  ⚠️  HIGH: ${high} (${findings.length > 0 ? ((high/findings.length)*100).toFixed(1) : 0}%)\n`;
+    msg += `  📌 MEDIUM: ${medium} (${findings.length > 0 ? ((medium/findings.length)*100).toFixed(1) : 0}%)\n\n`;
+
+    if (critical > 0) {
+      msg += `🚨 ACTION: Use "Recommended Blocks" to block top IPs`;
+    } else if (high > 0) {
+      msg += `⚠️  Monitor ongoing attacks in Security & Triaj`;
+    } else {
+      msg += `✅ Log appears clean`;
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 10: ATTACK TIMELINE (DATA-AWARE ✅)
+window.ATTACK_TIMELINE = {
+  show: function() {
+    const findings = Array.from(document.querySelectorAll('[data-severity]'));
+    if (findings.length === 0) {
+      alert('No attacks detected in this log. ✅ Good job!');
+      return;
+    }
+
+    const criticalFindings = findings.filter(f => f.dataset.severity === 'CRITICAL');
+    const highFindings = findings.filter(f => f.dataset.severity === 'HIGH');
+
+    let msg = `⏱️  ATTACK TIMELINE\n\n`;
+
+    if (criticalFindings.length > 0) {
+      msg += `🚨 CRITICAL INCIDENTS (${criticalFindings.length}):\n`;
+      criticalFindings.slice(0, 5).forEach((f, i) => {
+        const desc = f.textContent.substring(0, 50);
+        msg += `  ${i+1}. ${desc}...\n`;
+      });
+      if (criticalFindings.length > 5) {
+        msg += `  ... and ${criticalFindings.length - 5} more\n`;
+      }
+      msg += '\n';
+    }
+
+    if (highFindings.length > 0) {
+      msg += `⚠️  HIGH INCIDENTS (${highFindings.length}):\n`;
+      highFindings.slice(0, 3).forEach((f, i) => {
+        const desc = f.textContent.substring(0, 50);
+        msg += `  ${i+1}. ${desc}...\n`;
+      });
+      if (highFindings.length > 3) {
+        msg += `  ... and ${highFindings.length - 3} more\n`;
+      }
+    }
+
+    msg += '\n📌 Review "Security & Triaj" tab for full timeline';
+    alert(msg);
   }
 };
 
@@ -12098,6 +12286,11 @@ const initFeatureButtons = () => {
     { text: '📊 Recommendations', onclick: () => RECOMMENDATIONS.show() },
     { text: '🔍 Filters', onclick: () => QUICK_FILTERS.suggest() },
     { text: '📥 Export CSV', onclick: () => EXPORT_VIEW.exportCsv() },
+    { text: '🛡️ Recommended Blocks', onclick: () => RECOMMENDED_BLOCKS.show() },
+    { text: '🔒 Security Summary', onclick: () => SECURITY_SUMMARY.show() },
+    { text: '🎯 Threat Level', onclick: () => THREAT_LEVEL.show() },
+    { text: '📈 Quick Stats', onclick: () => QUICK_STATS.show() },
+    { text: '⏱️  Attack Timeline', onclick: () => ATTACK_TIMELINE.show() },
     { text: '❓ Help (?)', onclick: () => HELP.show() }
   ];
 
