@@ -84,30 +84,68 @@ if [ ! -f "$VENV_DIR/bin/python" ]; then
   exit 1
 fi
 
+# Get VPS IP address
+get_ip() {
+  # Try to get external IP
+  IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+  if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
+    # Fallback: try to get IP from network interfaces
+    IP=$(ip route get 1 2>/dev/null | awk '{print $NF;exit}')
+  fi
+  if [ -z "$IP" ] || [ "$IP" = "127.0.0.1" ]; then
+    # Last resort: use localhost
+    IP="localhost"
+  fi
+  echo "$IP"
+}
+
+VPS_IP=$(get_ip)
+
 # Start server
 echo "🚀 Starting logscan v52.1 (enhanced edition with 10 interactive features)..."
-echo "   Port: http://localhost:$PORT"
-echo "   Press Ctrl+C to stop"
+echo ""
+echo "📍 Access URL (from outside):"
+echo "   http://$VPS_IP:$PORT"
+echo ""
+echo "🌐 Local access:"
+echo "   http://localhost:$PORT"
+echo ""
+echo "⏹️  Press Ctrl+C to stop"
 echo ""
 
-# Open browser if requested
-if [ "$OPEN_BROWSER" = true ]; then
+# Open browser if requested (only on localhost)
+if [ "$OPEN_BROWSER" = true ] && [ "$VPS_IP" != "localhost" ]; then
   sleep 2 &  # Give server time to start
   SLEEP_PID=$!
 
-  # Determine browser command
+  # Try to open browser on local machine
   if command -v xdg-open &>/dev/null; then
     xdg-open "http://localhost:$PORT" &>/dev/null &
   elif command -v open &>/dev/null; then
     open "http://localhost:$PORT" &>/dev/null &
   elif command -v firefox &>/dev/null; then
     firefox "http://localhost:$PORT" &>/dev/null &
-  elif command -v chrome &>/dev/null; then
-    chrome "http://localhost:$PORT" &>/dev/null &
+  elif command -v chromium &>/dev/null; then
+    chromium "http://localhost:$PORT" &>/dev/null &
+  fi
+
+  wait $SLEEP_PID 2>/dev/null || true
+elif [ "$OPEN_BROWSER" = true ]; then
+  sleep 2 &
+  SLEEP_PID=$!
+
+  if command -v xdg-open &>/dev/null; then
+    xdg-open "http://127.0.0.1:$PORT" &>/dev/null &
+  elif command -v open &>/dev/null; then
+    open "http://127.0.0.1:$PORT" &>/dev/null &
+  elif command -v firefox &>/dev/null; then
+    firefox "http://127.0.0.1:$PORT" &>/dev/null &
+  elif command -v chromium &>/dev/null; then
+    chromium "http://127.0.0.1:$PORT" &>/dev/null &
   fi
 
   wait $SLEEP_PID 2>/dev/null || true
 fi
 
 cd "$SCRIPT_DIR" || exit 1
-"$VENV_DIR/bin/python" -m uvicorn app:app --host 127.0.0.1 --port "$PORT" $RELOAD
+"$VENV_DIR/bin/python" -m uvicorn app:app --host 0.0.0.0 --port "$PORT" $RELOAD
