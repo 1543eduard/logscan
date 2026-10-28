@@ -1,6 +1,6 @@
 #!/bin/bash
 # logscan - Security/Traffic Analytics Dashboard
-# Usage: logscan [--help] [--port PORT] [--reload]
+# Usage: logscan [--help] [--port PORT] [--reload] [--no-browser]
 
 set -e
 
@@ -8,8 +8,18 @@ set -e
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 VENV_DIR="/tmp/opencode/logscan-venv"
-PORT=${PORT:-8080}
+PORT=""
 RELOAD=""
+OPEN_BROWSER=true
+
+# Function to find available port
+find_available_port() {
+  local port=$((9000 + RANDOM % 1000))
+  while lsof -i :$port &>/dev/null 2>&1; do
+    port=$((9000 + RANDOM % 1000))
+  done
+  echo $port
+}
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -21,16 +31,18 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Options:"
       echo "  --help              Show this help message"
-      echo "  --port PORT         Run on PORT (default: 8080)"
+      echo "  --port PORT         Run on PORT (default: random 9000-9999)"
       echo "  --reload            Enable auto-reload on code changes"
+      echo "  --no-browser        Don't open browser automatically"
       echo ""
       echo "Examples:"
-      echo "  logscan                    # Start on port 8080"
-      echo "  logscan --port 9000        # Start on port 9000"
-      echo "  logscan --reload           # Start with auto-reload"
+      echo "  logscan                    # Start on random port, open browser"
+      echo "  logscan --port 8080        # Start on port 8080"
+      echo "  logscan --reload           # Dev mode with auto-reload"
+      echo "  logscan --no-browser       # Start but don't open browser"
       echo ""
       echo "Once started:"
-      echo "  • Open: http://localhost:8080"
+      echo "  • Browser opens automatically"
       echo "  • Press Ctrl+C to stop"
       exit 0
       ;;
@@ -42,6 +54,10 @@ while [[ $# -gt 0 ]]; do
       RELOAD="--reload"
       shift
       ;;
+    --no-browser)
+      OPEN_BROWSER=false
+      shift
+      ;;
     *)
       echo "Unknown option: $1"
       echo "Run 'logscan --help' for usage information"
@@ -49,6 +65,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# Use random port if not specified
+if [ -z "$PORT" ]; then
+  PORT=$(find_available_port)
+fi
 
 # Check venv exists
 if [ ! -d "$VENV_DIR" ]; then
@@ -68,6 +89,25 @@ echo "🚀 Starting logscan v52.1 (enhanced edition with 10 interactive features
 echo "   Port: http://localhost:$PORT"
 echo "   Press Ctrl+C to stop"
 echo ""
+
+# Open browser if requested
+if [ "$OPEN_BROWSER" = true ]; then
+  sleep 2 &  # Give server time to start
+  SLEEP_PID=$!
+
+  # Determine browser command
+  if command -v xdg-open &>/dev/null; then
+    xdg-open "http://localhost:$PORT" &>/dev/null &
+  elif command -v open &>/dev/null; then
+    open "http://localhost:$PORT" &>/dev/null &
+  elif command -v firefox &>/dev/null; then
+    firefox "http://localhost:$PORT" &>/dev/null &
+  elif command -v chrome &>/dev/null; then
+    chrome "http://localhost:$PORT" &>/dev/null &
+  fi
+
+  wait $SLEEP_PID 2>/dev/null || true
+fi
 
 cd "$SCRIPT_DIR" || exit 1
 "$VENV_DIR/bin/python" -m uvicorn app:app --host 127.0.0.1 --port "$PORT" $RELOAD
