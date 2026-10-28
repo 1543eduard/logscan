@@ -5589,6 +5589,18 @@ _purge_dead_workdirs()
 
 @app.get("/", response_class=HTMLResponse)
 def index():
+    # Root route now serves upload.html (primary interface)
+    upload_path = os.path.join(APP_DIR, "upload.html")
+    if os.path.exists(upload_path):
+        with open(upload_path, "r", encoding="utf-8") as f:
+            html = f.read()
+            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+    return HTMLResponse("<h1>upload.html lipseste din directorul aplicatiei</h1>", status_code=500)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page():
+    # Dashboard moved to /dashboard for advanced analysis
     dash_path = os.path.join(APP_DIR, "dashboard.html")
     if os.path.exists(dash_path):
         with open(dash_path, "r", encoding="utf-8") as f:
@@ -5600,12 +5612,8 @@ def index():
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_page():
-    upload_path = os.path.join(APP_DIR, "upload.html")
-    if os.path.exists(upload_path):
-        with open(upload_path, "r", encoding="utf-8") as f:
-            html = f.read()
-            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
-    return HTMLResponse("<h1>upload.html lipseste din directorul aplicatiei</h1>", status_code=500)
+    # Redirect to root for backwards compatibility
+    return HTMLResponse("<meta http-equiv='refresh' content='0; url=/' />", status_code=301)
 
 
 LOGSCAN_VERSION = "52.1"
