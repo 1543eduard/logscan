@@ -5598,6 +5598,16 @@ def index():
     return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
+@app.get("/upload", response_class=HTMLResponse)
+def upload_page():
+    upload_path = os.path.join(APP_DIR, "upload.html")
+    if os.path.exists(upload_path):
+        with open(upload_path, "r", encoding="utf-8") as f:
+            html = f.read()
+            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+    return HTMLResponse("<h1>upload.html lipseste din directorul aplicatiei</h1>", status_code=500)
+
+
 LOGSCAN_VERSION = "52.1"
 _STATIC_FONTS = os.path.join(APP_DIR, "static", "fonts")
 
