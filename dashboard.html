@@ -13587,41 +13587,48 @@ window.SEVERITY_DISTRIBUTION = {
 
 */
 
-// Auto-load dataset from URL parameter (from upload.html redirect)
+// Auto-load dataset from URL parameter (MANDATORY)
 (function autoLoadDataset() {
   const params = new URLSearchParams(window.location.search);
   const datasetId = params.get('id');
 
-  if (datasetId) {
-    console.log('✅ Loading dataset from URL:', datasetId);
-
-    fetch(`/api/dataset/${encodeURIComponent(datasetId)}/summary`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} - Dataset not found`);
-        return r.json();
-      })
-      .then(summary => {
-        console.log('✅ Dataset loaded successfully!');
-        const days = summary.days_available || [];
-
-        _onUploadSuccess({
-          dataset_id: datasetId,
-          filename: summary.filename || 'Analysis Results',
-          summary: summary,
-          days: days
-        });
-      })
-      .catch(err => {
-        console.error('❌ Failed to load dataset:', err.message);
-        // Redirect back to root if dataset not found
-        setTimeout(() => {
-          window.location.replace('/');
-        }, 2000);
-      });
-  } else {
-    console.log('📁 No dataset ID in URL - showing upload interface');
-    // No ID = show upload interface (dashboard fallback)
+  // FORCE LOAD - if no ID, go back to upload
+  if (!datasetId) {
+    console.log('❌ No dataset ID in URL - redirecting to /');
+    window.location.replace('/');
+    return;
   }
+
+  console.log('🔄 Loading dataset:', datasetId);
+
+  // Fetch dataset summary
+  fetch(`/api/dataset/${encodeURIComponent(datasetId)}/summary`)
+    .then(r => {
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status} - Dataset not found or expired`);
+      }
+      return r.json();
+    })
+    .then(summary => {
+      console.log('✅ Dataset loaded! Populating dashboard...');
+
+      const days = summary.days_available || [];
+
+      // CALL UPLOAD SUCCESS - this shows dashboard, hides upload
+      _onUploadSuccess({
+        dataset_id: datasetId,
+        filename: summary.filename || 'Analysis Results',
+        summary: summary,
+        days: days
+      });
+
+      console.log('✅ Dashboard populated with data!');
+    })
+    .catch(err => {
+      console.error('❌ Error loading dataset:', err.message);
+      alert('Dataset expirat sau nu găsit. Incarcă din nou.');
+      window.location.replace('/');
+    });
 })();
 </script>
 </body>

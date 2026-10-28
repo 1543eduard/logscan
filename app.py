@@ -5599,14 +5599,30 @@ def index():
 
 
 @app.get("/rezultate", response_class=HTMLResponse)
-def results_page():
-    # Full dashboard with all features
+def results_page(id: str = Query(default="")):
+    # Verify dataset exists before showing dashboard
+    if id:
+        ds = _get_dataset(id)
+        if not ds:
+            # Dataset not found - redirect to upload
+            return HTMLResponse(
+                "<html><head><meta http-equiv='refresh' content='0; url=/?error=Dataset+expirat' /></head></html>",
+                status_code=302
+            )
+    else:
+        # No dataset ID - redirect to upload
+        return HTMLResponse(
+            "<html><head><meta http-equiv='refresh' content='0; url=/' /></head></html>",
+            status_code=302
+        )
+
+    # Dataset exists - serve dashboard
     dash_path = os.path.join(APP_DIR, "dashboard.html")
     if os.path.exists(dash_path):
         with open(dash_path, "r", encoding="utf-8") as f:
             html = f.read().replace("?v=52.1", f"?v={LOGSCAN_VERSION}")
             return HTMLResponse(html, headers={"Cache-Control": "no-store"})
-    return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
+    return HTMLResponse("<h1>dashboard.html lipseste</h1>", status_code=500)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
