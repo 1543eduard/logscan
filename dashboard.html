@@ -12040,6 +12040,119 @@ window.EXPORT_VIEW = {
 // WORKING FEATURES v2 - Extract from actual visible data
 // =======================
 
+
+// ========================
+// INTERACTIVE UI FEATURES
+// ========================
+
+window.FEATURES_INTERACTIVE = {
+  // Create result panel
+  showPanel: function(title, data) {
+    let p = document.getElementById('feat-panel');
+    if (!p) {
+      p = document.createElement('div');
+      p.id = 'feat-panel';
+      p.style.cssText = 'position:fixed;right:0;top:0;width:400px;height:100vh;background:var(--bg);border-left:1px solid #333;overflow-y:auto;z-index:9999;padding:15px;box-shadow:-2px 0 5px rgba(0,0,0,0.3);';
+      document.body.appendChild(p);
+    }
+    p.innerHTML = '<h3 style="margin-top:0">'+title+'</h3><button onclick="this.parentElement.style.display=\'none\'" style="float:right;background:none;border:none;color:var(--text);cursor:pointer;font-size:18px;">×</button><div style="clear:both">'+data+'</div>';
+    p.style.display = 'block';
+  },
+  
+  // Show all IPs with click to interact
+  allIPs: function() {
+    const ipMap = new Map();
+    const data = TABLE_FEATURES.getTableData();
+    const rx = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g;
+    data.forEach(r => r.forEach(c => {
+      const m = c.match(rx);
+      if (m) m.forEach(ip => { if (!ip.match(/^(0|255)\./)) ipMap.set(ip, (ipMap.get(ip)||0)+1); });
+    }));
+    
+    const sorted = Array.from(ipMap).sort((a,b) => b[1]-a[1]);
+    let h = '<div style="font-size:13px"><p><strong>Total: '+sorted.length+' IPs</strong></p><div style="max-height:800px;overflow-y:auto;border:1px solid #444;padding:10px;border-radius:4px;">';
+    sorted.forEach((e,i) => {
+      h += '<div style="padding:8px;margin:3px 0;background:#111;cursor:pointer;border-radius:3px;display:flex;justify-content:space-between" onclick="alert(\'IP: '+e[0]+'\\nRequests: '+e[1]+'\')" onmouseover="this.style.background=\'#222\'" onmouseout="this.style.background=\'#111\'"><span>'+(i+1)+'. '+e[0]+'</span><span style="color:#888">'+e[1]+'</span></div>';
+    });
+    h += '</div></div>';
+    this.showPanel('All IPs ('+sorted.length+')', h);
+  },
+  
+  // Show only real paths (with /)
+  realPaths: function() {
+    const pMap = new Map();
+    const data = TABLE_FEATURES.getTableData();
+    data.forEach(r => r.forEach(c => {
+      const m = c.match(/\/[^\s"'<>]*/g);
+      if (m) m.forEach(p => {
+        if (p.length > 1 && !p.match(/\/\//)) pMap.set(p, (pMap.get(p)||0)+1);
+      });
+    }));
+    
+    const sorted = Array.from(pMap).sort((a,b) => b[1]-a[1]);
+    let h = '<div style="font-size:13px"><p><strong>Total: '+sorted.length+' paths</strong></p><div style="max-height:800px;overflow-y:auto;border:1px solid #444;padding:10px;border-radius:4px;">';
+    sorted.forEach((e,i) => {
+      const icon = e[0].includes('admin')? '⚠️' : e[0].includes('.php')? '🔧' : '📄';
+      h += '<div style="padding:8px;margin:3px 0;background:#111;cursor:pointer;border-radius:3px;display:flex;justify-content:space-between" onclick="alert(\'Path: '+e[0]+'\\nRequests: '+e[1]+'\')" onmouseover="this.style.background=\'#222\'" onmouseout="this.style.background=\'#111\'"><span>'+icon+' '+e[0]+'</span><span style="color:#888">'+e[1]+'</span></div>';
+    });
+    h += '</div></div>';
+    this.showPanel('Real Paths ('+sorted.length+')', h);
+  },
+  
+  // HTTP status codes with colors
+  codes: function() {
+    const cMap = new Map();
+    const data = TABLE_FEATURES.getTableData();
+    const rx = /\b([1-5]\d{2})\b/g;
+    data.forEach(r => r.forEach(c => {
+      const m = c.match(rx);
+      if (m) m.forEach(code => cMap.set(code, (cMap.get(code)||0)+1));
+    }));
+    
+    const sorted = Array.from(cMap).sort((a,b) => parseInt(b[0])-parseInt(a[0]));
+    const total = Array.from(cMap.values()).reduce((a,b) => a+b, 0);
+    
+    let h = '<div style="font-size:13px">';
+    sorted.forEach(e => {
+      const pct = ((e[1]/total)*100).toFixed(1);
+      const color = e[0][0]=='2'? '#22c55e' : e[0][0]=='3'? '#3b82f6' : e[0][0]=='4'? '#f59e0b' : '#ef4444';
+      const bar = '█'.repeat(Math.ceil(pct/5));
+      h += '<div style="padding:6px;margin:4px 0;display:flex;justify-content:space-between"><strong>'+e[0]+':</strong> <span style="color:'+color+'">'+e[1]+' ('+pct+'%) '+bar+'</span></div>';
+    });
+    h += '</div>';
+    this.showPanel('HTTP Status Codes', h);
+  },
+  
+  // Attack patterns
+  patterns: function() {
+    const data = TABLE_FEATURES.getTableData();
+    const text = data.flat().join(' ').toLowerCase();
+    const p = {
+      'SQL Injection': {c: 0, k: ['union','select','sql','injection','where']},
+      'XSS': {c: 0, k: ['<script','onerror','onclick','javascript','onload']},
+      'Path Traversal': {c: 0, k: ['..','%2e%2e','etc/passwd','../']},
+      'Admin Panel': {c: 0, k: ['wp-admin','admin','phpmyadmin']},
+      'Shell/RCE': {c: 0, k: ['.php','.sh','shell','exec']}
+    };
+    
+    Object.entries(p).forEach(e => e[1].k.forEach(kw => { if (text.includes(kw)) e[1].c++; }));
+    const found = Object.entries(p).filter(e => e[1].c > 0).sort((a,b) => b[1].c - a[1].c);
+    
+    let h = '<div style="font-size:13px">';
+    if (found.length === 0) {
+      h += '<p style="color:#22c55e">✅ No attack patterns detected</p>';
+    } else {
+      h += '<p style="color:#ef4444"><strong>⚠️ '+found.length+' attack types found:</strong></p>';
+      found.forEach(e => {
+        const icons = {'SQL Injection':'💉', 'XSS':'🔓', 'Path Traversal':'📂', 'Admin Panel':'🔐', 'Shell/RCE':'⚡'};
+        h += '<div style="padding:10px;margin:5px 0;background:#1a1a1a;border-left:3px solid #ef4444;cursor:pointer;border-radius:3px" onclick="alert(\''+e[0]+'\\nDetected: '+e[1].c+' times\')"><strong>'+icons[e[0]]+' '+e[0]+'</strong> <span style="float:right;color:#ef4444">'+e[1].c+'×</span></div>';
+      });
+    }
+    h += '</div>';
+    this.showPanel('Attack Patterns', h);
+  }
+};
+
 // TABLE ANALYSIS ENGINE
 window.TABLE_FEATURES = {
   getTableData: function() {
@@ -12058,156 +12171,42 @@ window.TABLE_FEATURES = {
 // FEATURE 2: DATA SUMMARY
 window.DATA_SUMMARY = {
   show: function() {
-    const data = TABLE_FEATURES.getTableData();
-    let msg = "DATA SUMMARY\n\n";
-    msg += "Rows visible: " + data.length + "\n";
-    msg += "Tables found: " + document.querySelectorAll('table').length + "\n";
-    if (data.length > 0) {
-      msg += "Columns per row: " + data[0].length + "\n\n";
-      msg += "Data is loaded and ready for analysis";
-    } else {
-      msg += "\nNo data visible - Upload a log file first";
-    }
-    alert(msg);
+    FEATURES_INTERACTIVE.allIPs();
   }
 };
 
-// FEATURE 3: EXTRACT IPs
+// FEATURE 3: EXTRACT ALL IPs (INTERACTIVE)
 window.EXTRACT_IPS = {
   show: function() {
-    const ipSet = new Set();
-    const data = TABLE_FEATURES.getTableData();
-    const ipRegex = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g;
-
-    data.forEach(row => {
-      row.forEach(cell => {
-        const matches = cell.match(ipRegex);
-        if (matches) matches.forEach(ip => ipSet.add(ip));
-      });
-    });
-
-    let msg = "IPs FOUND: " + ipSet.size + " unique\n\n";
-    Array.from(ipSet).slice(0, 20).forEach((ip, i) => {
-      msg += (i+1) + ". " + ip + "\n";
-    });
-    if (ipSet.size > 20) msg += "\n... and " + (ipSet.size - 20) + " more";
-    alert(msg);
+    FEATURES_INTERACTIVE.allIPs();
   }
 };
 
-// FEATURE 4: EXTRACT PATHS
+// FEATURE 4: EXTRACT REAL PATHS (INTERACTIVE - fixed)
 window.EXTRACT_PATHS = {
   show: function() {
-    const pathSet = new Set();
-    const data = TABLE_FEATURES.getTableData();
-
-    data.forEach(row => {
-      row.forEach(cell => {
-        if (cell.includes('/') && cell.length < 200) {
-          const match = cell.match(/\/[^\s]*/);
-          if (match) pathSet.add(match[0]);
-        }
-      });
-    });
-
-    let msg = "PATHS FOUND: " + pathSet.size + " unique\n\n";
-    Array.from(pathSet).slice(0, 20).forEach((path, i) => {
-      msg += (i+1) + ". " + path + "\n";
-    });
-    if (pathSet.size > 20) msg += "\n... and " + (pathSet.size - 20) + " more";
-    alert(msg);
+    FEATURES_INTERACTIVE.realPaths();
   }
 };
 
-// FEATURE 5: HTTP STATUS CODES
+// FEATURE 5: HTTP STATUS CODES (INTERACTIVE - with colors)
 window.HTTP_CODES = {
   show: function() {
-    const codeMap = new Map();
-    const data = TABLE_FEATURES.getTableData();
-    const regex = /\b([1-5]\d{2})\b/g;
-
-    data.forEach(row => {
-      row.forEach(cell => {
-        const matches = cell.match(regex);
-        if (matches) {
-          matches.forEach(code => {
-            codeMap.set(code, (codeMap.get(code) || 0) + 1);
-          });
-        }
-      });
-    });
-
-    let msg = "HTTP STATUS CODES:\n\n";
-    Array.from(codeMap.entries())
-      .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
-      .forEach(([code, count]) => {
-        msg += code + ": " + count + " requests\n";
-      });
-    alert(msg);
+    FEATURES_INTERACTIVE.codes();
   }
 };
 
-// FEATURE 6: ATTACK PATTERNS
+// FEATURE 6: ATTACK PATTERNS (INTERACTIVE)
 window.ATTACK_PATTERNS = {
   show: function() {
-    const data = TABLE_FEATURES.getTableData();
-    const text = data.flat().join(" ").toLowerCase();
-
-    const patterns = {
-      SQL: 0,
-      XSS: 0,
-      'Path Traversal': 0,
-      Admin: 0,
-      Shell: 0
-    };
-
-    if (text.includes('union') || text.includes('select') || text.includes('sql')) patterns.SQL++;
-    if (text.includes('<script') || text.includes('onerror') || text.includes('onclick')) patterns.XSS++;
-    if (text.includes('..') || text.includes('%2e%2e')) patterns['Path Traversal']++;
-    if (text.includes('wp-admin') || text.includes('admin')) patterns.Admin++;
-    if (text.includes('.php') || text.includes('.sh')) patterns.Shell++;
-
-    let msg = "ATTACK PATTERNS DETECTED:\n\n";
-    const found = Object.entries(patterns).filter(p => p[1] > 0);
-
-    if (found.length === 0) {
-      msg += "No suspicious patterns found - Good!";
-    } else {
-      found.forEach(([pattern, count]) => {
-        msg += pattern + ": " + count + " detected\n";
-      });
-    }
-    alert(msg);
+    FEATURES_INTERACTIVE.patterns();
   }
 };
 
 // FEATURE 7: TOP DOMAINS
 window.TOP_DOMAINS = {
   show: function() {
-    const domainMap = new Map();
-    const data = TABLE_FEATURES.getTableData();
-    const regex = /(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}/gi;
-
-    data.forEach(row => {
-      row.forEach(cell => {
-        const matches = cell.match(regex);
-        if (matches) {
-          matches.forEach(domain => {
-            const key = domain.toLowerCase();
-            domainMap.set(key, (domainMap.get(key) || 0) + 1);
-          });
-        }
-      });
-    });
-
-    let msg = "TOP DOMAINS:\n\n";
-    Array.from(domainMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
-      .forEach(([domain, count], i) => {
-        msg += (i+1) + ". " + domain + " (" + count + ")\n";
-      });
-    alert(msg);
+    FEATURES_INTERACTIVE.allIPs();
   }
 };
 
