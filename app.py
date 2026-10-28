@@ -5600,14 +5600,11 @@ def index():
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page():
-    # Dashboard moved to /dashboard for advanced analysis
-    dash_path = os.path.join(APP_DIR, "dashboard.html")
-    if os.path.exists(dash_path):
-        with open(dash_path, "r", encoding="utf-8") as f:
-            # no-store: dupa o actualizare browserul nu mai poate servi dashboard-ul vechi din cache
-            html = f.read().replace("?v=52.1", f"?v={LOGSCAN_VERSION}")
-            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
-    return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
+    # Redirect to root - upload is the primary interface
+    return HTMLResponse(
+        "<html><head><meta http-equiv='refresh' content='0; url=/' /></head><body>Redirecting...</body></html>",
+        status_code=302
+    )
 
 
 @app.get("/upload", response_class=HTMLResponse)
