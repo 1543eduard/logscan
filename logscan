@@ -148,4 +148,12 @@ elif [ "$OPEN_BROWSER" = true ]; then
 fi
 
 cd "$SCRIPT_DIR" || exit 1
+
+# Set allowed hosts environment variable
+export LOGSCAN_ALLOWED_HOSTS="localhost,127.0.0.1,$VPS_IP"
+if [ "$VPS_IP" != "localhost" ]; then
+  export LOGSCAN_ALLOWED_HOSTS="$LOGSCAN_ALLOWED_HOSTS,0.0.0.0"
+fi
+
+# Start app
 "$VENV_DIR/bin/python" -m uvicorn app:app --host 0.0.0.0 --port "$PORT" $RELOAD
