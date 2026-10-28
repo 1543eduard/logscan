@@ -5598,11 +5598,22 @@ def index():
     return HTMLResponse("<h1>upload.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
+@app.get("/rezultate", response_class=HTMLResponse)
+def results_page():
+    # Full dashboard with all features
+    dash_path = os.path.join(APP_DIR, "dashboard.html")
+    if os.path.exists(dash_path):
+        with open(dash_path, "r", encoding="utf-8") as f:
+            html = f.read().replace("?v=52.1", f"?v={LOGSCAN_VERSION}")
+            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+    return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page():
-    # Redirect to root - upload is the primary interface
+    # Backwards compatibility - redirect to /rezultate
     return HTMLResponse(
-        "<html><head><meta http-equiv='refresh' content='0; url=/' /></head><body>Redirecting...</body></html>",
+        "<html><head><meta http-equiv='refresh' content='0; url=/rezultate' /></head><body>Redirecting...</body></html>",
         status_code=302
     )
 
