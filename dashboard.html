@@ -12440,6 +12440,194 @@ window.SUSPICIOUS_PATTERNS = {
   }
 };
 
+// FEATURE 16: REQUEST METHOD ANALYSIS (DATA-AWARE)
+window.REQUEST_METHODS = {
+  show: function() {
+    const methodElements = document.querySelectorAll('[data-method]');
+    const methodMap = new Map();
+
+    methodElements.forEach(el => {
+      const method = el.dataset.method;
+      methodMap.set(method, (methodMap.get(method) || 0) + 1);
+    });
+
+    if (methodMap.size === 0) {
+      alert('No request method data found.');
+      return;
+    }
+
+    let msg = `📋 REQUEST METHODS\n\n`;
+    const total = methodElements.length;
+
+    Array.from(methodMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .forEach(entry => {
+        const method = entry[0];
+        const count = entry[1];
+        const pct = ((count / total) * 100).toFixed(1);
+        msg += `${method.padEnd(8)}: ${count.toString().padStart(5)} (${pct.padStart(5)}%)\n`;
+      });
+
+    msg += `\nTotal: ${total} requests`;
+    alert(msg);
+  }
+};
+
+// FEATURE 17: RESPONSE SIZE ANALYSIS (DATA-AWARE)
+window.RESPONSE_SIZES = {
+  show: function() {
+    const sizeElements = document.querySelectorAll('[data-size]');
+    let totalSize = 0;
+    let avgSize = 0;
+    let maxSize = 0;
+
+    sizeElements.forEach(el => {
+      const size = parseInt(el.dataset.size) || 0;
+      totalSize += size;
+      if (size > maxSize) maxSize = size;
+    });
+
+    avgSize = sizeElements.length > 0 ? Math.round(totalSize / sizeElements.length) : 0;
+
+    let msg = `📦 RESPONSE SIZE ANALYSIS\n\n`;
+    msg += `Total data transferred: ${(totalSize / 1024 / 1024).toFixed(2)} MB\n`;
+    msg += `Average response: ${(avgSize / 1024).toFixed(2)} KB\n`;
+    msg += `Largest response: ${(maxSize / 1024).toFixed(2)} KB\n`;
+    msg += `Total requests: ${sizeElements.length}\n\n`;
+
+    if (totalSize > 1000000000) {
+      msg += 'Large data transfers detected - check for data exfiltration!';
+    } else if (totalSize > 100000000) {
+      msg += 'Notable bandwidth usage - monitor for anomalies';
+    } else {
+      msg += 'Bandwidth usage within normal range';
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 18: REQUEST FREQUENCY TIMELINE (DATA-AWARE)
+window.FREQUENCY_TIMELINE = {
+  show: function() {
+    const timeElements = document.querySelectorAll('[data-time]');
+    const hourMap = new Map();
+
+    timeElements.forEach(el => {
+      const time = el.dataset.time;
+      const hour = time ? time.substring(0, 13) : 'unknown';
+      hourMap.set(hour, (hourMap.get(hour) || 0) + 1);
+    });
+
+    if (hourMap.size === 0) {
+      alert('No timestamp data available.');
+      return;
+    }
+
+    const sorted = Array.from(hourMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+    let msg = `⏰ REQUEST FREQUENCY BY TIME\n\n`;
+    let peak = 0;
+    let peakTime = '';
+
+    sorted.forEach(entry => {
+      if (entry[1] > peak) {
+        peak = entry[1];
+        peakTime = entry[0];
+      }
+      const bar = '█'.repeat(Math.ceil(entry[1] / 10));
+      msg += `${entry[0]}: ${entry[1].toString().padStart(4)} ${bar}\n`;
+    });
+
+    msg += `\nPeak hour: ${peakTime} (${peak} requests)`;
+    alert(msg);
+  }
+};
+
+// FEATURE 19: USER AGENT ANALYSIS (DATA-AWARE)
+window.USERAGENT_ANALYSIS = {
+  show: function() {
+    const uaElements = document.querySelectorAll('[data-useragent]');
+    const uaMap = new Map();
+
+    uaElements.forEach(el => {
+      const ua = el.dataset.useragent || 'Unknown';
+      const browser = ua.includes('Chrome') ? 'Chrome' :
+                      ua.includes('Firefox') ? 'Firefox' :
+                      ua.includes('Safari') ? 'Safari' :
+                      ua.includes('Edge') ? 'Edge' :
+                      ua.includes('curl') ? 'curl' :
+                      ua.includes('wget') ? 'wget' :
+                      ua.includes('Python') ? 'Python' :
+                      ua.includes('bot') ? 'Bot' : 'Other';
+      uaMap.set(browser, (uaMap.get(browser) || 0) + 1);
+    });
+
+    if (uaMap.size === 0) {
+      alert('No user agent data found.');
+      return;
+    }
+
+    const sorted = Array.from(uaMap.entries())
+      .sort((a, b) => b[1] - a[1]);
+
+    let msg = `🔍 USER AGENT BREAKDOWN\n\n`;
+    const total = uaElements.length;
+
+    sorted.forEach((entry, i) => {
+      const agent = entry[0];
+      const count = entry[1];
+      const pct = ((count / total) * 100).toFixed(1);
+      msg += `${i+1}. ${agent.padEnd(12)}: ${count.toString().padStart(4)} (${pct.padStart(5)}%)\n`;
+    });
+
+    msg += `\nTotal user agents: ${uaMap.size}`;
+    alert(msg);
+  }
+};
+
+// FEATURE 20: IP REPUTATION SUMMARY (DATA-AWARE)
+window.IP_REPUTATION_SUMMARY = {
+  show: function() {
+    const ipElements = document.querySelectorAll('[data-ip]');
+    const ipMap = new Map();
+
+    ipElements.forEach(el => {
+      const ip = el.dataset.ip;
+      const severity = el.dataset.severity || 'UNKNOWN';
+      if (!ipMap.has(ip)) {
+        ipMap.set(ip, { critical: 0, high: 0, medium: 0, total: 0 });
+      }
+      const stats = ipMap.get(ip);
+      if (severity === 'CRITICAL') stats.critical++;
+      else if (severity === 'HIGH') stats.high++;
+      else if (severity === 'MEDIUM') stats.medium++;
+      stats.total++;
+    });
+
+    if (ipMap.size === 0) {
+      alert('No IP data found.');
+      return;
+    }
+
+    const sorted = Array.from(ipMap.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 20);
+
+    let msg = `🌐 IP REPUTATION SUMMARY (Top 20)\n\n`;
+
+    sorted.forEach((entry, i) => {
+      const ip = entry[0];
+      const stats = entry[1];
+      const threat = stats.critical > 0 ? '🚨' : stats.high > 0 ? '⚠️ ' : '📌';
+      msg += `${i+1}. ${threat} ${ip}\n`;
+      msg += `   └─ Findings: ${stats.critical}C ${stats.high}H ${stats.medium}M\n`;
+    });
+
+    alert(msg);
+  }
+};
+
 // Initialize features on page load
 document.addEventListener('DOMContentLoaded', () => {
   THEME.init();
@@ -12475,6 +12663,11 @@ const initFeatureButtons = () => {
     { text: '📊 Status Codes', onclick: () => STATUS_BREAKDOWN.show() },
     { text: '🌍 Countries', onclick: () => COUNTRY_HEATMAP.show() },
     { text: '🔍 Patterns', onclick: () => SUSPICIOUS_PATTERNS.show() },
+    { text: '📋 Methods', onclick: () => REQUEST_METHODS.show() },
+    { text: '📦 Response Sizes', onclick: () => RESPONSE_SIZES.show() },
+    { text: '⏰ Frequency', onclick: () => FREQUENCY_TIMELINE.show() },
+    { text: '🔍 User Agents', onclick: () => USERAGENT_ANALYSIS.show() },
+    { text: '🌐 IP Reputation', onclick: () => IP_REPUTATION_SUMMARY.show() },
     { text: '❓ Help (?)', onclick: () => HELP.show() }
   ];
 
