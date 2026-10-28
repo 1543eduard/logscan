@@ -1,0 +1,71 @@
+#!/bin/bash
+# logscan - Security/Traffic Analytics Dashboard
+# Usage: logscan [--help] [--port PORT] [--reload]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_DIR="$SCRIPT_DIR/../logscan-venv"
+PORT=${PORT:-8080}
+RELOAD=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --help)
+      echo "logscan - Security/Traffic Analytics Dashboard"
+      echo ""
+      echo "Usage: logscan [OPTIONS]"
+      echo ""
+      echo "Options:"
+      echo "  --help              Show this help message"
+      echo "  --port PORT         Run on PORT (default: 8080)"
+      echo "  --reload            Enable auto-reload on code changes"
+      echo ""
+      echo "Examples:"
+      echo "  logscan                    # Start on port 8080"
+      echo "  logscan --port 9000        # Start on port 9000"
+      echo "  logscan --reload           # Start with auto-reload"
+      echo ""
+      echo "Once started:"
+      echo "  • Open: http://localhost:8080"
+      echo "  • Press Ctrl+C to stop"
+      exit 0
+      ;;
+    --port)
+      PORT="$2"
+      shift 2
+      ;;
+    --reload)
+      RELOAD="--reload"
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      echo "Run 'logscan --help' for usage information"
+      exit 1
+      ;;
+  esac
+done
+
+# Check venv exists
+if [ ! -d "$VENV_DIR" ]; then
+  echo "❌ Error: Virtual environment not found at $VENV_DIR"
+  echo "Please restore it from backup or reinstall"
+  exit 1
+fi
+
+# Check Python
+if [ ! -f "$VENV_DIR/bin/python" ]; then
+  echo "❌ Error: Python not found in venv"
+  exit 1
+fi
+
+# Start server
+echo "🚀 Starting logscan v52.1 (enhanced edition with 10 interactive features)..."
+echo "   Port: http://localhost:$PORT"
+echo "   Press Ctrl+C to stop"
+echo ""
+
+cd "$SCRIPT_DIR"
+"$VENV_DIR/bin/python" -m uvicorn app:app --host 127.0.0.1 --port "$PORT" $RELOAD

@@ -1,49 +1,47 @@
 #!/bin/bash
-# Instalare logscan pe o masina noua (Linux / macOS), din folderul clonat:
-#   ./install.sh            -> creeaza venv/ si instaleaza dependintele
-#   ./install.sh --link     -> in plus, comanda "logscan" in /usr/local/bin
-#                              (cere drepturi de scriere acolo, de ex. root / sudo)
-# Actualizare ulterioara: git pull (comanda "logscan" foloseste direct repo-ul).
+# logscan installation script
+# Installs global 'logscan' command
+
 set -e
-APP_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
-cd "$APP_DIR"
-# numpy 2.x cere Python >= 3.11; pe multe servere "python3" e mai vechi
-# (AlmaLinux / CentOS 8: 3.6), deci cautam cel mai nou interpretor disponibil.
-ok() { "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; }
-PY=""
-for c in ${PYTHON:-} python3.14 python3.13 python3.12 python3.11 python3; do
-    if command -v "$c" >/dev/null 2>&1 && ok "$c"; then PY="$c"; break; fi
-done
-if [ -z "$PY" ]; then
-    echo "Lipseste Python 3.11 sau mai nou (python3 de aici: $(python3 --version 2>&1))."
-    echo "Instaleaza-l, de ex.:  dnf install python3.11   |   apt install python3.11 python3.11-venv   |   brew install python@3.12"
-    exit 1
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOGSCAN_SCRIPT="$SCRIPT_DIR/logscan"
+
+echo "📦 Installing logscan command..."
+
+# Check if script exists
+if [ ! -f "$LOGSCAN_SCRIPT" ]; then
+  echo "❌ Error: logscan script not found at $LOGSCAN_SCRIPT"
+  exit 1
 fi
-if [ -x venv/bin/python ] && ! ok venv/bin/python; then
-    echo "-> venv/ e facut cu un Python prea vechi ($(venv/bin/python --version 2>&1)); il refac"
-    rm -rf venv
+
+# Make executable
+chmod +x "$LOGSCAN_SCRIPT"
+
+# Install to /usr/local/bin
+if sudo -n true 2>/dev/null; then
+  echo "📝 Copying to /usr/local/bin/logscan..."
+  sudo cp "$LOGSCAN_SCRIPT" /usr/local/bin/logscan
+  echo "✅ Done! Now you can run: logscan"
+else
+  # Fallback: install to ~/.local/bin
+  mkdir -p ~/.local/bin
+  cp "$LOGSCAN_SCRIPT" ~/.local/bin/logscan
+  
+  # Add to PATH if not already there
+  if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc 2>/dev/null || true
+    echo "⚠️  Added $HOME/.local/bin to PATH. Run: source ~/.bashrc"
+  fi
+  
+  echo "✅ Done! Now you can run: logscan"
 fi
-if [ ! -x venv/bin/python ]; then
-    echo "-> creez venv/ cu $PY ($("$PY" --version 2>&1))"
-    "$PY" -m venv venv
-fi
-echo "-> instalez dependintele (requirements.txt)"
-venv/bin/python -m pip install -q --upgrade pip
-venv/bin/python -m pip install -q -r requirements.txt
-# verificare: modulele se incarca efectiv (eroarea reala, nu una generica, mai tarziu)
-if ! venv/bin/python -c "import numpy, fastapi, uvicorn" 2> .install-check.err; then
-    echo
-    echo "ATENTIE: dependintele s-au instalat, dar nu se incarca:"
-    tail -3 .install-check.err
-    echo "Incearca:  venv/bin/python -m pip install --force-reinstall --no-cache-dir -r requirements.txt"
-    echo "Daca persista, trimite mesajul de mai sus (si iesirea lui: uname -m; venv/bin/python -VV)."
-    rm -f .install-check.err
-    exit 1
-fi
-rm -f .install-check.err
-chmod +x bin/logscan
-if [ "$1" = "--link" ]; then
-    ln -sf "$APP_DIR/bin/logscan" /usr/local/bin/logscan
-    echo "-> comanda 'logscan' -> $APP_DIR/bin/logscan"
-fi
-echo "Gata. Porneste cu:  $APP_DIR/bin/logscan   (sau 'logscan' daca ai folosit --link)"
+
+echo ""
+echo "🎉 Installation complete!"
+echo ""
+echo "Try it:"
+echo "  logscan              # Start on port 8080"
+echo "  logscan --port 9000  # Start on port 9000"
+echo "  logscan --help       # Show help"

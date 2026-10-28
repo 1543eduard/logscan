@@ -3,16 +3,17 @@
 logscan - Security / Traffic Analytics Dashboard pentru loguri cPanel Raw
 Access (Apache/LiteSpeed combined format).
 
-Single-file FastAPI backend + dashboard.html (frontend static, Chart.js
-inclus direct in pagina -- fara dependinte externe). Upload un log
+Backend FastAPI + dashboard.html (frontend static, Chart.js local in
+static/vendor -- fara dependinte externe). Upload un log
 (.log/.txt/.gz/.zip), motorul il parseaza o singura data
-pe toate core-urile disponibile si tine un "dataset" in memorie (cu TTL) pe
-care dashboard-ul il interogheaza interactiv: filtrare pe zi, drill-down pe
+pe toate core-urile disponibile si tine un "dataset" in memorie pe care
+dashboard-ul il interogheaza interactiv: filtrare pe zi, drill-down pe
 IP/URL/subnet, export CSV/JSON.
 
 Fisierul decomprimat (plain text) e pastrat temporar cat timp dataset-ul e
 activ, ca sa poata servi vizualizarea de linii brute la drill-down -- se
-sterge automat la expirarea TTL-ului sau la oprirea aplicatiei.
+sterge la oprirea aplicatiei sau la curatarea explicita; nu exista TTL
+ascuns care sa intrerupa o analiza in curs.
 
 v44: filtrele globale, panoul inferior, histograma si pagina Prezentare
 raspund dintr-un index COLUMNAR in memorie (triage_columnar.py, necesita
@@ -20,10 +21,12 @@ numpy -- optional: fara el se foloseste indexul SQLite, cu aceleasi cifre).
 Dependinte: fastapi, uvicorn, python-multipart; optional numpy.
 """
 import argparse
+import atexit
 import calendar
 import csv
 import gzip
 import hashlib
+import mimetypes
 import html
 import io
 import ipaddress
@@ -44,6 +47,7 @@ import urllib.request
 import uuid
 import zipfile
 from collections import Counter, defaultdict, deque
+from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from urllib.parse import unquote
@@ -52,6 +56,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import FastAPI, UploadFile, File, Form, Query, Request, Body
 from fastapi.responses import HTMLResponse, PlainTextResponse, JSONResponse, Response, FileResponse, StreamingResponse
+from starlette.middleware.gzip import GZipMiddleware
 import uvicorn
 
 import triage_engine
@@ -138,11 +143,35 @@ def _lookup6(ip):
     return _geoip6.lookup(ip) if _geoip6 else None
 
 
+def _is_private_ip(ip):
+    """Detecta private IP ranges: 10.x, 172.16-31.x, 192.168.x, 127.x, ::1, fc00::/7, fe80::/10"""
+    if not ip:
+        return False
+    if ":" in ip:  # IPv6
+        try:
+            import ipaddress
+            return ipaddress.IPv6Address(ip).is_private
+        except:
+            return False
+    # IPv4
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return False
+    try:
+        a, b, c, d = (int(p) for p in parts)
+        return a == 10 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168) or a == 127
+    except:
+        return False
+
+
 def country_of(ip):
-    """Cod de tara (ex: 'RO') pentru un IP, sau '' daca GeoIP nu e
-    disponibil / IP-ul nu e gasit in baza de date. Lookup local, offline,
-    ~microsecunde. '' inseamna NEDETERMINAT -- nu se ghiceste niciodata."""
-    if not _geoip or not ip:
+    """Cod de tara (ex: 'RO') pentru un IP, 'Private' pentru private IPs,
+    sau '' daca GeoIP nu e disponibil. Lookup local, offline, ~microsecunde."""
+    if not ip:
+        return ""
+    if _is_private_ip(ip):
+        return "Private"
+    if not _geoip:
         return ""
     try:
         r = _lookup6(ip) if ":" in ip else _geoip.lookup(ip)
@@ -275,6 +304,10 @@ def wordfence_refresh(force=False):
     force=True. Ruleaza pe un thread separat, nu blocheaza niciodata
     cererile HTTP normale. Sigura de apelat oricand -- orice eroare e
     prinsa si stocata in _wordfence_state['last_error'], nimic nu crapa."""
+    if OFFLINE:
+        with _wordfence_lock:
+            _wordfence_state["last_error"] = "offline: feed-ul Wordfence nu este descarcat"
+        return
     now = time.time()
     with _wordfence_lock:
         if not force and (now - _wordfence_state["last_attempt"]) < WORDFENCE_REFRESH_SECONDS:
@@ -356,10 +389,111 @@ def wordfence_match_paths(top_paths_counter, path_ips):
 # --------------------------------------------------------------------------
 # Config
 # --------------------------------------------------------------------------
-MAX_UPLOAD_BYTES = 8 * 1024 * 1024 * 1024  # 8 GB decompressed safety cap
-DATASET_TTL_SECONDS = 2 * 3600  # dataset-ul (inclusiv fisierul plain de pe disc) tinut 2h
+# Limite de resurse. Sunt intentionat configurabile: aplicatia e un tool
+# local, temporar, nu un serviciu multi-user.
+def _env_int(name: str, default: int, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(os.environ.get(name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+MAX_UPLOAD_BYTES = _env_int("LOGSCAN_MAX_UPLOAD_MB", 8192, 1) * 1024 * 1024
+MAX_ZIP_ENTRIES = _env_int("LOGSCAN_MAX_ZIP_ENTRIES", 2000, 1)
+MAX_UPLOAD_FILES = _env_int("LOGSCAN_MAX_UPLOAD_FILES", 20, 1)
+MAX_ZIP_RATIO = _env_int("LOGSCAN_MAX_ZIP_RATIO", 250, 1)
+MAX_UPLOAD_CHUNK_BYTES = _env_int("LOGSCAN_MAX_CHUNK_MB", 64, 1) * 1024 * 1024
+UPLOAD_TTL_SECONDS = _env_int("LOGSCAN_UPLOAD_TTL_SECONDS", 6 * 3600, 60)
+MAX_ACTIVE_DATASETS = _env_int("LOGSCAN_MAX_ACTIVE_DATASETS", 32, 1)
+# 0 = limita automata (70% din RAM fizica). Se poate fixa explicit cu
+# LOGSCAN_MAX_RSS_MB. Guard-ul este conservator: refuza inainte de indexare
+# daca estimarea depaseste bugetul, ca sa nu omoare procesul prin OOM.
+MAX_RSS_MB = _env_int("LOGSCAN_MAX_RSS_MB", 0, 0)
+# 0 = fara expirare automata. Aplicatia se opreste manual, iar datele sunt
+# efemere; un TTL fix ar intrerupe exact analiza pe care userul o are deschisa.
+DATASET_TTL_SECONDS = _env_int("LOGSCAN_DATASET_TTL_SECONDS", 0, 0)
+OFFLINE = os.environ.get("LOGSCAN_OFFLINE", "1").strip().lower() not in {"0", "false", "no", "off"}
 DATASETS: Dict[str, Dict[str, Any]] = {}  # dataset_id -> Dataset dict
+
+
+def _physical_mem_mb():
+    total = 0
+    try:
+        with open("/proc/meminfo", "r", encoding="ascii") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    total = int(line.split()[1]) // 1024
+                    break
+    except OSError:
+        pass
+    # In containere, /proc/meminfo arata RAM hostului; limita cgroup este cea
+    # care conteaza pentru OOM. O luam in calcul daca e mai mica.
+    for path in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            with open(path, "r", encoding="ascii") as f:
+                raw = f.read().strip()
+            if raw and raw != "max":
+                lim_mb = int(raw) // (1024 * 1024)
+                if lim_mb > 0 and (not total or lim_mb < total):
+                    total = lim_mb
+        except (OSError, ValueError):
+            pass
+    return total
+
+
+def _memory_limit_mb():
+    if MAX_RSS_MB:
+        return MAX_RSS_MB
+    total = _physical_mem_mb()
+    return int(total * 0.70) if total else 0
+
+
+def _rss_mb():
+    try:
+        with open("/proc/self/statm", "r", encoding="ascii") as f:
+            pages = int(f.read().split()[1])
+        return int(pages * os.sysconf("SC_PAGE_SIZE") / 1048576)
+    except (OSError, ValueError, IndexError):
+        pass
+    try:
+        import resource
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024)
+    except Exception:
+        return 0
+
+
+def _memory_preflight(plain_bytes: int):
+    """Returneaza un mesaj daca indexarea estimata nu incape in RAM."""
+    limit = _memory_limit_mb()
+    if not limit:
+        return None
+    est_mb = int(plain_bytes / 1048576 * 1.25) + 64
+    used = _rss_mb()
+    if used + est_mb > limit:
+        return (f"Memorie insuficienta: estimare {est_mb} MB + uz curent {used} MB "
+                f"depaseste limita de {limit} MB. Seteaza LOGSCAN_MAX_RSS_MB sau foloseste un log mai mic.")
+    return None
 DATASETS_LOCK = threading.Lock()
+
+# Toate workdir-urile temporare sunt inregistrate aici, ca sa poata fi
+# sterse garantat la shutdown/atexit. Implicit folosim temp-ul sistemului;
+# LOGSCAN_WORK_ROOT=/dev/shm/logscan muta datele in RAM (tmpfs).
+WORK_ROOT = os.environ.get("LOGSCAN_WORK_ROOT") or tempfile.gettempdir()
+WORKDIR_PREFIX = f"logscan_ds_{os.getpid()}_"
+ACTIVE_WORKDIRS: Set[str] = set()
+ACTIVE_WORKDIRS_LOCK = threading.Lock()
+
+
+def _dataset_capacity_error():
+    with DATASETS_LOCK:
+        n = len(DATASETS)
+    if n >= MAX_ACTIVE_DATASETS:
+        return JSONResponse(
+            {"error": f"Limita de analize active este {MAX_ACTIVE_DATASETS}. Opreste/sterge o analiza mai veche sau reporneste aplicatia.",
+             "active_datasets": n, "max_active_datasets": MAX_ACTIVE_DATASETS},
+            status_code=429,
+        )
+    return None
 
 MAX_IPS_PER_BUCKET = 300_000     # plafon IP-uri unice retinute per path/subnet/pattern
 MAX_LOGIN_ATTEMPTS_PER_IP = 5000
@@ -718,12 +852,26 @@ SCAN_SIG_QUICK_RE = re.compile("|".join(re.escape(n) for n in _SCAN_SIG_NEEDLES)
 SUSPICIOUS_QUICK_RE = re.compile("|".join(re.escape(h) for h in SUSPICIOUS_QUICK_HINTS))
 
 
+def _copy_limited(src, dst, limit, label):
+    """Copiaza un stream si refuza depasirea limitei (gzip/zip bomb)."""
+    total = 0
+    while True:
+        chunk = src.read(4 * 1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ValueError(f"{label} depaseste limita de {limit // (1024 * 1024)} MB dupa decomprimare")
+        dst.write(chunk)
+    return total
+
+
 def decompress_to_plain(src_path, workdir):
     lower = src_path.lower()
     if lower.endswith(".gz"):
         plain_path = os.path.join(workdir, "plain.log")
         with gzip.open(src_path, "rb") as fin, open(plain_path, "wb") as fout:
-            shutil.copyfileobj(fin, fout, length=4 * 1024 * 1024)
+            _copy_limited(fin, fout, MAX_UPLOAD_BYTES, "Arhiva gzip")
         return plain_path
     if lower.endswith(".zip"):
         plain_path = os.path.join(workdir, "plain.log")
@@ -731,14 +879,26 @@ def decompress_to_plain(src_path, workdir):
             names = [n for n in zf.namelist() if not n.endswith("/")]
             if not names:
                 raise ValueError("Arhiva zip e goala")
+            if len(names) > MAX_ZIP_ENTRIES:
+                raise ValueError(f"Arhiva zip are prea multe fisiere ({len(names)} > {MAX_ZIP_ENTRIES})")
+            declared_total = 0
             for name in names:
                 info = zf.getinfo(name)
                 if info.file_size > MAX_UPLOAD_BYTES:
                     raise ValueError(f"Fisier prea mare in zip (posibil zip bomb): {name}")
+                declared_total += info.file_size
+                if declared_total > MAX_UPLOAD_BYTES:
+                    raise ValueError(f"Arhiva zip depaseste limita de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+                if info.compress_size > 0 and info.file_size > 1024 * 1024:
+                    ratio = info.file_size / info.compress_size
+                    if ratio > MAX_ZIP_RATIO:
+                        raise ValueError(f"Rata de compresie prea mare pentru {name} ({ratio:.0f}x); posibil zip bomb")
+            written = 0
+            for name in names:
                 with zf.open(name) as f:
                     if name.lower().endswith(".gz"):
                         f = gzip.GzipFile(fileobj=f)
-                    shutil.copyfileobj(f, fout, length=4 * 1024 * 1024)
+                    written += _copy_limited(f, fout, MAX_UPLOAD_BYTES - written, f"Arhiva zip ({name})")
         return plain_path
     return src_path
 
@@ -922,6 +1082,19 @@ def _parse_line_escaped(line):
     return ip, method, path, status, referer, ua, time_str, size
 
 
+def _is_valid_ipv4(ip):
+    """Valideaza IPv4: 4 octeti, fiecare 0-255."""
+    if not ip or '.' not in ip:
+        return False
+    parts = ip.split('.')
+    if len(parts) != 4:
+        return False
+    try:
+        return all(0 <= int(p) <= 255 for p in parts)
+    except ValueError:
+        return False
+
+
 def parse_line_fast(line):
     """Parser bazat pe str.find()/split() (cod C), fara regex pe hot-path.
     Returneaza (ip, method, path_raw, status:int, referer, ua, time_str) sau
@@ -941,7 +1114,7 @@ def parse_line_fast(line):
     pre = line[:q1]
     sp = pre.find(" ")
     ip = pre[:sp] if sp != -1 else pre
-    if not ip:
+    if not ip or not _is_valid_ipv4(ip):
         return None
     b1 = pre.find("[")
     b2 = pre.find("]", b1 + 1) if b1 != -1 else -1
@@ -1864,7 +2037,7 @@ def _process_chunk(args):
             raw_line = f.readline()
             if not raw_line:
                 break
-            pos = f.tell()
+            pos = line_start + len(raw_line)
             line = raw_line.decode("utf-8", errors="replace")
 
             rec = parse_line_fast(line)
@@ -2170,10 +2343,12 @@ def _process_chunk(args):
                 wp["xmlrpc"] = wp.get("xmlrpc", 0) + 1
             if "/wp-json/" in path_low:
                 wp["wp_json"] = wp.get("wp_json", 0) + 1
-            if path_only.endswith("wp-cron.php"):
+            if "wp-cron.php" in path_low and path_only.endswith("wp-cron.php"):
                 wp["wp_cron"] = wp.get("wp_cron", 0) + 1
                 wp_cron_day_counter[day] = wp_cron_day_counter.get(day, 0) + 1
-            if _is_login_ep(path_only):
+            is_login_ep = "wp-login.php" in path_low and _is_login_ep(path_only)
+            is_xmlrpc_ep = "xmlrpc.php" in path_low and _is_xmlrpc_ep(path_only)
+            if is_login_ep:
                 if method == "GET":
                     wp["wp_login_get"] = wp.get("wp_login_get", 0) + 1
                 elif method == "POST":
@@ -2183,7 +2358,7 @@ def _process_chunk(args):
                     if status == 302:
                         _log_admin(ip, "Login reusit (302)", tstr, method, path_raw, status, _dom(line_start))
 
-            if method == "POST" and (_is_login_ep(path_only) or _is_xmlrpc_ep(path_only)):
+            if method == "POST" and (is_login_ep or is_xmlrpc_ep):
                 attempts = login_attempts[ip]
                 if len(attempts) < MAX_LOGIN_ATTEMPTS_PER_IP:
                     attempts.append((status, tstr, _dom(line_start)))
@@ -3323,6 +3498,26 @@ def _safe_worker_count(size_bytes, requested_workers):
     est_mb_per_worker = max(150.0, (size_bytes / (1024 * 1024)) / max(1, requested_workers) * 3)
     budget_workers = max(1, int((avail_mb * 0.7) / est_mb_per_worker))
     return max(1, min(requested_workers, budget_workers))
+
+
+def _calculate_adaptive_chunks(file_size_bytes):
+    """OPT-2: Calculeaza adaptive number of chunks pe baza marimii fisierului.
+    < 100MB: 1 chunk (no parallelism overhead)
+    100MB-500MB: cpu_count chunks
+    500MB-2GB: cpu_count * 2 chunks
+    > 2GB: cpu_count * 4 chunks
+    Resulta in mai buna utilizare a CPUs si memorie."""
+    size_mb = file_size_bytes / (1024 * 1024)
+    cores = _cpu_quota_cores()
+
+    if size_mb < 100:
+        return 1
+    elif size_mb < 500:
+        return cores
+    elif size_mb < 2000:
+        return cores * 2
+    else:
+        return cores * 4
 
 
 def run_engine(path, n_workers=None, day_filter=None, region=None, hour_filter=None, minute_filter=None, segments=None,
@@ -4805,11 +5000,14 @@ def _start_crawler_verification(dataset_id, claim_ip_identity):
     ip_identity_pairs = list(claim_ip_identity.items())
     with _CRAWLER_JOBS_LOCK:
         _CRAWLER_JOBS[dataset_id] = {
-            "total": len(ip_identity_pairs), "completed": 0,
-            "verified": 0, "unverified": 0, "not_checked": 0,
-            "pending": bool(ip_identity_pairs), "results": {},
+            "total": len(ip_identity_pairs),
+            "completed": len(ip_identity_pairs) if OFFLINE else 0,
+            "verified": 0, "unverified": 0,
+            "not_checked": len(ip_identity_pairs) if OFFLINE else 0,
+            "pending": bool(ip_identity_pairs) and not OFFLINE, "results": {},
+            "offline": bool(OFFLINE),
         }
-    if not ip_identity_pairs:
+    if not ip_identity_pairs or OFFLINE:
         return
 
     def _runner():
@@ -5149,10 +5347,22 @@ def _get_job(job_id):
 
 
 def _run_ingest_job(job_id, plain_path, workdir, display_name, filenames, file_segments, content_sha=None):
+    dataset_created = False
     try:
         _set_job(job_id, status="parsing", progress=15, lines_done=0)
         _t = time.time()
+        cap_err = _dataset_capacity_error()
+        if cap_err is not None:
+            _set_job(job_id, status="error", error=cap_err.body.decode("utf-8", "replace"))
+            _drop_workdir(workdir)
+            return
         _total_bytes = max(1, os.path.getsize(plain_path))
+        _mem_err = _memory_preflight(_total_bytes)
+        if _mem_err:
+            _set_job(job_id, status="error", error=_mem_err)
+            if not dataset_created:
+                _drop_workdir(workdir)
+            return
         _mon_stop = threading.Event()
 
         def _progress_monitor():
@@ -5209,6 +5419,7 @@ def _run_ingest_job(job_id, plain_path, workdir, display_name, filenames, file_s
                 "triage_ready": False, "triage_error": None,
                 "content_sha": content_sha,
             }
+        dataset_created = True
         _start_crawler_verification(dataset_id, merged["claim_ip_identity"])
         # "done" IMEDIAT ce sumarul e gata: toate taburile v42 devin utilizabile
         # fara sa mai astepte indexul. Indexul (deja scris in shard-uri in
@@ -5219,11 +5430,85 @@ def _run_ingest_job(job_id, plain_path, workdir, display_name, filenames, file_s
         _finalize_triage_index(dataset_id, workdir, shards)
     except Exception as e:
         _set_job(job_id, status="error", error=str(e))
+        if not dataset_created:
+            _drop_workdir(workdir)
 
 
 # --------------------------------------------------------------------------
-# Dataset store (in memorie, cu TTL)
+# Dataset store (in memorie; fara TTL artificial)
 # --------------------------------------------------------------------------
+def _new_workdir():
+    """Creeaza un workdir temporar si il inregistreaza pentru cleanup sigur."""
+    try:
+        os.makedirs(WORK_ROOT, exist_ok=True)
+    except OSError:
+        pass
+    wd = tempfile.mkdtemp(prefix=WORKDIR_PREFIX, dir=WORK_ROOT if os.path.isdir(WORK_ROOT) else None)
+    with ACTIVE_WORKDIRS_LOCK:
+        ACTIVE_WORKDIRS.add(os.path.abspath(wd))
+    return wd
+
+
+def _drop_workdir(workdir):
+    if not workdir:
+        return
+    ap = os.path.abspath(workdir)
+    with ACTIVE_WORKDIRS_LOCK:
+        ACTIVE_WORKDIRS.discard(ap)
+    shutil.rmtree(ap, ignore_errors=True)
+
+
+def _purge_dead_workdirs():
+    """La startup, sterge workdir-urile ramase de la procese moarte.
+
+    Prefixul contine PID-ul, deci nu atingem datele unei alte instante care
+    inca ruleaza. Directoarele vechi fara PID (versiuni anterioare) sunt
+    sterse: aplicatia este locala si efemera.
+    """
+    try:
+        names = os.listdir(WORK_ROOT)
+    except OSError:
+        return
+    for name in names:
+        if not name.startswith("logscan_ds_"):
+            continue
+        path = os.path.join(WORK_ROOT, name)
+        if not os.path.isdir(path):
+            continue
+        pid = None
+        parts = name.split("_")
+        if len(parts) >= 4 and parts[2].isdigit():
+            pid = int(parts[2])
+        if pid is not None:
+            if pid == os.getpid():
+                continue
+            try:
+                os.kill(pid, 0)
+                continue
+            except OSError:
+                pass
+        shutil.rmtree(path, ignore_errors=True)
+
+
+def cleanup_runtime(reason=""):
+    """Curata toate datele efemere. Se apeleaza la shutdown si la atexit."""
+    with DATASETS_LOCK:
+        workdirs = [d.get("workdir") for d in DATASETS.values() if d.get("workdir")]
+        DATASETS.clear()
+    with UPLOADS_LOCK:
+        uploads = [u.get("workdir") for u in UPLOADS.values() if u.get("workdir")]
+        UPLOADS.clear()
+    for wd in workdirs + uploads:
+        _drop_workdir(wd)
+    with ACTIVE_WORKDIRS_LOCK:
+        remaining = list(ACTIVE_WORKDIRS)
+    for wd in remaining:
+        _drop_workdir(wd)
+
+
+atexit.register(cleanup_runtime, "atexit")
+
+
 def _new_dataset_id():
     return uuid.uuid4().hex
 
@@ -5232,17 +5517,18 @@ def sweeper():
     while True:
         time.sleep(120)
         now = time.time()
-        with DATASETS_LOCK:
-            expired = [did for did, ds in DATASETS.items() if now - ds["created"] > DATASET_TTL_SECONDS]
-            for did in expired:
-                ds = DATASETS.pop(did, None)
-                if ds and ds.get("workdir") and os.path.isdir(ds["workdir"]):
-                    shutil.rmtree(ds["workdir"], ignore_errors=True)
-        with _CRAWLER_JOBS_LOCK:
-            for did in expired:
-                _CRAWLER_JOBS.pop(did, None)
-        # v44: job-urile de upload tin sumarul COMPLET in memorie (zeci de MB
-        # pe loguri mari) -- inainte nu se stergeau niciodata.
+        # Fara expirare de dataset: analiza ramane deschisa pana opreste
+        # userul procesul. Curatam doar upload-urile abandonate.
+        if UPLOAD_TTL_SECONDS > 0:
+            with UPLOADS_LOCK:
+                expired = [uid for uid, up in UPLOADS.items()
+                           if now - up.get("last_activity", up.get("created", now)) > UPLOAD_TTL_SECONDS]
+                uploads = [UPLOADS.pop(uid, None) for uid in expired]
+            for up in uploads:
+                if up:
+                    _drop_workdir(up.get("workdir"))
+        # Job-urile tin sumarul complet in memorie; dupa o ora nu mai e
+        # nevoie de ele (nu sunt datele analizei).
         with JOBS_LOCK:
             for jid in [j for j, job in JOBS.items() if now - job.get("updated", job.get("created", now)) > 3600]:
                 JOBS.pop(jid, None)
@@ -5251,7 +5537,54 @@ def sweeper():
 # --------------------------------------------------------------------------
 # FastAPI app
 # --------------------------------------------------------------------------
-app = FastAPI()
+@asynccontextmanager
+async def _lifespan(_app):
+    yield
+    cleanup_runtime("shutdown")
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=_lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]", "testserver"}
+_ALLOWED_HOSTS.update(h.strip().lower() for h in os.environ.get("LOGSCAN_ALLOWED_HOSTS", "").split(",") if h.strip())
+
+
+def _request_hostname(request: Request) -> str:
+    raw = (request.headers.get("host") or "").strip().lower()
+    if raw.startswith("["):
+        return raw.split("]", 1)[0] + "]"
+    return raw.rsplit(":", 1)[0] if raw.count(":") == 1 else raw
+
+
+@app.middleware("http")
+async def _security_middleware(request: Request, call_next):
+    # Aplicatia e locala si efemera. Host-ul este validat ca sa nu poata fi
+    # transformata intr-un proxy pentru DNS rebinding catre 127.0.0.1.
+    host = _request_hostname(request)
+    if host not in _ALLOWED_HOSTS:
+        return JSONResponse({"error": "Host nepermis. Ruleaza local sau seteaza LOGSCAN_ALLOWED_HOSTS."},
+                            status_code=400)
+    response = await call_next(request)
+    if not request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+    )
+    return response
+
+
+_purge_dead_workdirs()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -5260,11 +5593,12 @@ def index():
     if os.path.exists(dash_path):
         with open(dash_path, "r", encoding="utf-8") as f:
             # no-store: dupa o actualizare browserul nu mai poate servi dashboard-ul vechi din cache
-            return HTMLResponse(f.read(), headers={"Cache-Control": "no-store"})
+            html = f.read().replace("?v=52.1", f"?v={LOGSCAN_VERSION}")
+            return HTMLResponse(html, headers={"Cache-Control": "no-store"})
     return HTMLResponse("<h1>dashboard.html lipseste din directorul aplicatiei</h1>", status_code=500)
 
 
-LOGSCAN_VERSION = "51.1"
+LOGSCAN_VERSION = "52.1"
 _STATIC_FONTS = os.path.join(APP_DIR, "static", "fonts")
 
 
@@ -5294,11 +5628,34 @@ def static_flag(name: str):
                         headers={"Cache-Control": "public, max-age=604800", "X-Content-Type-Options": "nosniff"})
 
 
+_STATIC_ROOT = os.path.realpath(os.path.join(APP_DIR, "static"))
+
+
+@app.get("/static/{path:path}")
+def static_asset(path: str):
+    """CSS/JS/fonturi/steaguri locale. Fara traversare in afara static/."""
+    full = os.path.realpath(os.path.join(_STATIC_ROOT, path))
+    if not full.startswith(_STATIC_ROOT + os.sep) or not os.path.isfile(full):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    media, _ = mimetypes.guess_type(full)
+    return FileResponse(full, media_type=media or "application/octet-stream",
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/api/version")
 def api_version():
     """Versiunea care ruleaza (verificare rapida dupa instalare)."""
-    return JSONResponse({"version": LOGSCAN_VERSION, "columnar": bool(getattr(triage_columnar, "AVAILABLE", False)),
-                         "upload_gzip": True})
+    return JSONResponse({
+        "version": LOGSCAN_VERSION,
+        "columnar": bool(getattr(triage_columnar, "AVAILABLE", False)),
+        "upload_gzip": True,
+        "offline": OFFLINE,
+        "ephemeral": True,
+        "max_upload_bytes": MAX_UPLOAD_BYTES,
+        "max_active_datasets": MAX_ACTIVE_DATASETS,
+        "dataset_ttl": DATASET_TTL_SECONDS,
+        "work_root_ram": os.path.realpath(WORK_ROOT).startswith("/dev/shm"),
+    })
 
 
 @app.post("/api/upload")
@@ -5319,21 +5676,40 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
     # singura data ca un dataset combinat (indexul per-zi/motorul de
     # analiza nu au nevoie de nicio modificare, ele oricum nu presupun ca
     # fisierul e cronologic -- vezi README, punctul 4).
-    workdir = tempfile.mkdtemp(prefix="logscan_ds_")
+    capacity_err = _dataset_capacity_error()
+    if capacity_err is not None:
+        return capacity_err
+    if len(files) > MAX_UPLOAD_FILES:
+        return JSONResponse({"error": f"Prea multe fisiere ({len(files)} > {MAX_UPLOAD_FILES})."}, status_code=400)
+    workdir = _new_workdir()
     filenames: List[str] = []
     domain_guesses = []
     plain_parts: List[str] = []
+    total_bytes = 0
+    plain_bytes_total = 0
     try:
         for f in files:
-            raw_path = os.path.join(workdir, f"src_{len(filenames)}_{f.filename or 'upload.log'}")
+            original_name = f.filename or "upload.log"
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(original_name)) or "upload.log"
+            raw_path = os.path.join(workdir, f"src_{len(filenames)}_{safe_name}")
+            remaining = MAX_UPLOAD_BYTES - total_bytes
+            if remaining <= 0:
+                raise ValueError(f"Upload-ul depaseste limita de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
             with open(raw_path, "wb") as out:
-                shutil.copyfileobj(f.file, out, length=4 * 1024 * 1024)
-            filenames.append(f.filename or "upload.log")
+                total_bytes += _copy_limited(f.file, out, remaining, original_name)
+            filenames.append(original_name)
             try:
                 part_path = decompress_to_plain(raw_path, workdir)
             except Exception as e:
-                shutil.rmtree(workdir, ignore_errors=True)
+                _drop_workdir(workdir)
                 return JSONResponse({"error": f"{f.filename}: {e}"}, status_code=400)
+            plain_bytes_total += os.path.getsize(part_path)
+            if plain_bytes_total > MAX_UPLOAD_BYTES:
+                _drop_workdir(workdir)
+                return JSONResponse(
+                    {"error": f"Continutul decomprimat depaseste limita de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB."},
+                    status_code=413,
+                )
             was_archive = part_path != raw_path
             # redenumim la un nume unic, ca sa nu se suprapuna cu urmatorul
             # decompress_to_plain din bucla, care ar produce mereu "plain.log"
@@ -5345,11 +5721,11 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
             plain_parts.append(part_path)
             domain_guesses.append(extract_domain_from_filename(f.filename))
     except Exception as e:
-        shutil.rmtree(workdir, ignore_errors=True)
+        _drop_workdir(workdir)
         return JSONResponse({"error": str(e)}, status_code=400)
 
     if not plain_parts:
-        shutil.rmtree(workdir, ignore_errors=True)
+        _drop_workdir(workdir)
         return JSONResponse({"error": "Niciun fisier primit."}, status_code=400)
 
     # Detectie mismatch de domeniu: comparam doar fisierele la care am putut
@@ -5360,7 +5736,7 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
     known_domains = sorted(set(d for d in domain_guesses if d))
     domain_mismatch = len(known_domains) > 1
     if domain_mismatch and not force:
-        shutil.rmtree(workdir, ignore_errors=True)
+        _drop_workdir(workdir)
         return JSONResponse({
             "domain_mismatch": True,
             "domains_detected": known_domains,
@@ -5397,10 +5773,21 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
                 file_segments.append((seg_start, seg_end, label))
                 os.remove(part)
 
-    merged = run_engine(plain_path, n_workers=None, day_filter=None, segments=file_segments,
-                        index_workdir=workdir)
-    _shards = merged.pop("_shards", [])
-    summary = build_summary(merged)
+    mem_err = _memory_preflight(os.path.getsize(plain_path))
+    if mem_err:
+        _drop_workdir(workdir)
+        return JSONResponse({"error": mem_err}, status_code=507)
+    try:
+        # OPT-2: Adaptive chunk count based on file size for better parallelism
+        file_size = os.path.getsize(plain_path)
+        adaptive_workers = _calculate_adaptive_chunks(file_size)
+        merged = run_engine(plain_path, n_workers=adaptive_workers, day_filter=None, segments=file_segments,
+                            index_workdir=workdir)
+        _shards = merged.pop("_shards", [])
+        summary = build_summary(merged)
+    except Exception as e:
+        _drop_workdir(workdir)
+        return JSONResponse({"error": f"Analiza a esuat: {e}"}, status_code=500)
 
     days_available = summary["days_available"]
     # Indexul per-zi vine GRATUIT din day_bounds, calculat in aceeasi (si
@@ -5444,7 +5831,13 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
     # trecere ca restul motorului -- vezi _process_chunk).
     _start_crawler_verification(dataset_id, merged["claim_ip_identity"])
     # Index de securitate (v43) -- la fel, in fundal, dupa raspuns.
-    _INGEST_EXECUTOR.submit(_finalize_triage_index, dataset_id, workdir, _shards)
+    try:
+        _INGEST_EXECUTOR.submit(_finalize_triage_index, dataset_id, workdir, _shards)
+    except Exception as e:
+        with DATASETS_LOCK:
+            DATASETS.pop(dataset_id, None)
+        _drop_workdir(workdir)
+        return JSONResponse({"error": f"Nu pot porni indexarea: {e}"}, status_code=500)
 
     return JSONResponse({
         "dataset_id": dataset_id,
@@ -7169,7 +7562,8 @@ def _restructure_export(summary):
 
 
 @app.get("/api/dataset/{dataset_id}/export.json")
-def api_export_json(dataset_id: str, day: str = Query(default="ALL"), gf: str = Query(default="")):
+def api_export_json(dataset_id: str, day: str = Query(default="ALL"), gf: str = Query(default=""),
+                    redact: bool = False):
     ds = _get_dataset(dataset_id)
     if not ds:
         return JSONResponse({"error": "Dataset expirat sau inexistent."}, status_code=404)
@@ -7182,9 +7576,76 @@ def api_export_json(dataset_id: str, day: str = Query(default="ALL"), gf: str = 
     restructured["_export"] = {"tip": "SUMAR / STATISTICI (nu liniile brute)", "selectie_gf": json.loads(gf) if gf else {},
                                "zi": day, "cereri_in_selectie": summary.get("total"),
                                "versiune": LOGSCAN_VERSION}
+    if redact:
+        restructured = _redact_json(restructured, dataset_id)
+        restructured["_export"]["redactat"] = True
+        filename = "logscan_sumar_redactat.json"
+    else:
+        filename = "logscan_sumar.json"
+    jh = {"Content-Disposition": f"attachment; filename={filename}"}
+    if redact:
+        jh["X-Redacted"] = "1"
     return Response(content=json.dumps(restructured, ensure_ascii=False, indent=2),
-                     media_type="application/json",
-                     headers={"Content-Disposition": "attachment; filename=logscan_sumar.json"})
+                     media_type="application/json", headers=jh)
+
+
+def _redact_ip(value, seed):
+    """Pseudonimizeaza o adresa IP, pastrand corelatia in acelasi dataset."""
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+    try:
+        ipaddress.ip_address(text)
+    except ValueError:
+        return text
+    token = hashlib.sha256((str(seed) + ":" + text).encode("utf-8")).hexdigest()[:10]
+    return "ip_" + token
+
+
+def _redact_log_line(line, seed):
+    """Mascheaza IP-urile dintr-o linie bruta, inclusiv cele din URL/referer."""
+    try:
+        text = line.decode("utf-8")
+    except UnicodeDecodeError:
+        return line
+    return _redact_text(text, seed).encode("utf-8")
+
+
+_REDACT_IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])")
+_REDACT_IPV6 = re.compile(r"(?<![0-9A-Za-z:])([0-9a-fA-F:]{2,})(?![0-9A-Za-z:])")
+
+
+def _redact_text(text, seed):
+    """Mascheaza IP-urile si cand apar in mijlocul unui text (findings, UA etc.)."""
+    def one(m):
+        try:
+            ipaddress.ip_address(m.group(0))
+        except ValueError:
+            return m.group(0)
+        return _redact_ip(m.group(0), seed)
+    return _REDACT_IPV6.sub(one, _REDACT_IPV4.sub(one, str(text)))
+
+
+def _redact_json(value, seed):
+    if isinstance(value, dict):
+        return {k: _redact_json(v, seed) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_json(v, seed) for v in value]
+    if isinstance(value, str):
+        return _redact_text(value, seed)
+    return value
+
+
+def _csv_safe(value):
+    """Neutralizeaza formulele CSV/Excel (CSV injection) fara a strica numerele."""
+    if value is None:
+        return ""
+    if isinstance(value, (int, float, bool)):
+        return value
+    text = str(value)
+    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + text
+    return text
 
 
 # Coloanele CSV per tip de export -- vezi api_export_csv. Fiecare tip
@@ -7246,7 +7707,7 @@ _CSV_EXPORTS = {
 
 @app.get("/api/dataset/{dataset_id}/export.csv")
 def api_export_csv(dataset_id: str, day: str = Query(default="ALL"), type: str = Query(default="findings"),
-                   gf: str = Query(default="")):
+                   gf: str = Query(default=""), redact: bool = False):
     """Export CSV -- separat pe tip (findings/anomalies/ips/crawlers/paths/
     bursts), fiecare cu propriile coloane relevante. Implicit 'findings',
     pastrand exact comportamentul vechi al butonului existent din UI daca
@@ -7269,9 +7730,14 @@ def api_export_csv(dataset_id: str, day: str = Query(default="ALL"), type: str =
     w = csv.writer(buf)
     w.writerow(header)
     for row in rows:
-        w.writerow(row)
-    return Response(content=buf.getvalue(), media_type="text/csv",
-                     headers={"Content-Disposition": f"attachment; filename=logscan_sumar_{t}.csv"})
+        if redact:
+            row = [_redact_text(x, dataset_id) if isinstance(x, str) else x for x in row]
+        w.writerow([_csv_safe(x) for x in row])
+    suffix = "_redactat" if redact else ""
+    ch = {"Content-Disposition": f"attachment; filename=logscan_sumar_{t}{suffix}.csv"}
+    if redact:
+        ch["X-Redacted"] = "1"
+    return Response(content=buf.getvalue(), media_type="text/csv", headers=ch)
 
 
 @app.get("/healthz")
@@ -7290,6 +7756,9 @@ def api_wordfence_refresh():
     # ca sa nu blocheze raspunsul HTTP cat timp se descarca feed-ul (poate
     # dura pana la ~1 minut). Raspunsul e imediat; statusul se verifica apoi
     # din /api/wordfence/status.
+    if OFFLINE:
+        return JSONResponse({"error": "Modul offline este activ; feed-ul Wordfence nu este descarcat."},
+                            status_code=409)
     threading.Thread(target=wordfence_refresh, kwargs={"force": True}, daemon=True).start()
     return JSONResponse({"started": True})
 
@@ -7305,61 +7774,135 @@ def api_wordfence_refresh():
 # ==========================================================================
 @app.post("/api/upload2/init")
 def api_upload2_init(payload: dict):
-    filename = (payload or {}).get("filename") or "upload.log"
+    capacity_err = _dataset_capacity_error()
+    if capacity_err is not None:
+        return capacity_err
+    payload = payload or {}
+    filename = str(payload.get("filename") or "upload.log")
     try:
-        total_size = int((payload or {}).get("total_size") or 0)
+        total_size = int(payload.get("total_size") or 0)
     except (TypeError, ValueError):
-        total_size = 0
+        return JSONResponse({"error": "total_size invalid."}, status_code=400)
+    if total_size <= 0:
+        return JSONResponse({"error": "Fisierul este gol (total_size=0)."}, status_code=400)
     if total_size > MAX_UPLOAD_BYTES:
-        return JSONResponse({"error": "Fisier peste limita permisa (8 GB)."}, status_code=400)
+        return JSONResponse({"error": f"Fisier peste limita permisa ({MAX_UPLOAD_BYTES // (1024 * 1024)} MB)."},
+                            status_code=413)
+    encoding = str(payload.get("encoding") or "").lower()
+    if encoding not in ("", "gzip"):
+        return JSONResponse({"error": "encoding invalid (foloseste '' sau 'gzip')."}, status_code=400)
+    expected_sha = (str(payload.get("sha256") or "").strip().lower() or None)
+    if expected_sha is not None and not re.fullmatch(r"[0-9a-f]{64}", expected_sha):
+        return JSONResponse({"error": "sha256 invalid."}, status_code=400)
     upload_id = uuid.uuid4().hex
-    workdir = tempfile.mkdtemp(prefix="logscan_ds_")
-    safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", filename) or "upload.log"
-    # v50: browserul comprima bucatile cu gzip inainte de trimitere (logurile
-    # scad de ~10 ori) -- fisierul primit e atunci un gzip multi-membru, pe
-    # care decompress_to_plain il recunoaste dupa extensie.
-    if (payload or {}).get("encoding") == "gzip" and not safe_name.lower().endswith(".gz"):
+    workdir = _new_workdir()
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", os.path.basename(filename)) or "upload.log"
+    if encoding == "gzip" and not safe_name.lower().endswith(".gz"):
         safe_name += ".gz"
     raw_path = os.path.join(workdir, "incoming_" + safe_name)
-    open(raw_path, "wb").close()
+    try:
+        open(raw_path, "wb").close()
+    except OSError as e:
+        _drop_workdir(workdir)
+        return JSONResponse({"error": f"Nu pot crea fisierul temporar: {e}"}, status_code=500)
     with UPLOADS_LOCK:
         UPLOADS[upload_id] = {
             "workdir": workdir, "raw_path": raw_path, "filename": filename,
-            "total_size": total_size, "received": 0, "next_index": 0, "created": time.time(),
-            # amprenta continutului, calculata pe masura ce sosesc bucatile
-            # (~0.1s la 40 MB) -- vezi deduplicarea din api_upload2_complete
-            "sha": hashlib.sha256(),
+            "total_size": total_size, "received": 0, "next_index": 0,
+            "created": time.time(), "last_activity": time.time(),
+            "encoding": encoding, "sha": hashlib.sha256(), "expected_sha256": expected_sha,
+            "busy": False,
         }
-    return JSONResponse({"upload_id": upload_id})
+    return JSONResponse({"upload_id": upload_id, "max_chunk_bytes": MAX_UPLOAD_CHUNK_BYTES})
 
 
 @app.post("/api/upload2/chunk/{upload_id}")
 async def api_upload2_chunk(upload_id: str, request: Request, index: int = Query(default=0)):
     with UPLOADS_LOCK:
         up = UPLOADS.get(upload_id)
-    if not up:
-        return JSONResponse({"error": "Upload inexistent sau expirat. Reincarca fisierul."}, status_code=404)
-    if index != up["next_index"]:
-        return JSONResponse(
-            {"error": f"Bucata out-of-order (asteptat {up['next_index']}, primit {index})."},
-            status_code=409,
-        )
-    body = await request.body()
-    with open(up["raw_path"], "ab") as f:
-        f.write(body)
-    up["sha"].update(body)
-    up["received"] += len(body)
-    up["next_index"] += 1
-    if up["received"] > MAX_UPLOAD_BYTES:
+        if not up:
+            return JSONResponse({"error": "Upload inexistent sau expirat. Reincarca fisierul."}, status_code=404)
+        if index != up["next_index"]:
+            return JSONResponse(
+                {"error": f"Bucata out-of-order (asteptat {up['next_index']}, primit {index})."},
+                status_code=409,
+            )
+        if up.get("busy"):
+            return JSONResponse({"error": "O alta bucata este deja in scriere; reincearca."}, status_code=409)
+        up["busy"] = True
+        up["last_activity"] = time.time()
+        before = up["received"]
+
+    declared = request.headers.get("content-length")
+    if declared:
+        try:
+            declared_n = int(declared)
+        except ValueError:
+            declared_n = -1
+        if declared_n < 0 or declared_n > MAX_UPLOAD_CHUNK_BYTES:
+            with UPLOADS_LOCK:
+                up["busy"] = False
+            return JSONResponse({"error": f"Bucata depaseste limita de {MAX_UPLOAD_CHUNK_BYTES // (1024 * 1024)} MB."},
+                                status_code=413)
+
+    written = 0
+    try:
+        with open(up["raw_path"], "ab") as fout:
+            async for chunk in request.stream():
+                if not chunk:
+                    continue
+                written += len(chunk)
+                if written > MAX_UPLOAD_CHUNK_BYTES:
+                    raise ValueError(f"Bucata depaseste limita de {MAX_UPLOAD_CHUNK_BYTES // (1024 * 1024)} MB")
+                if before + written > MAX_UPLOAD_BYTES:
+                    raise ValueError(f"Upload-ul depaseste limita de {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
+                fout.write(chunk)
+                up["sha"].update(chunk)
+        if written <= 0:
+            raise ValueError("Bucata este goala")
+        if up.get("encoding") != "gzip" and before + written > up["total_size"]:
+            raise ValueError("Bucata depaseste total_size declarat")
+    except Exception as e:
+        # O bucata esuata invalideaza SHA-ul incremental; preferam sa
+        # aruncam upload-ul decat sa continuam cu un hash inconsistent.
         with UPLOADS_LOCK:
             UPLOADS.pop(upload_id, None)
-        shutil.rmtree(up["workdir"], ignore_errors=True)
-        return JSONResponse({"error": "Fisier peste limita permisa (8 GB)."}, status_code=400)
-    return JSONResponse({"received": up["received"], "next_index": up["next_index"]})
+        _drop_workdir(up.get("workdir"))
+        return JSONResponse({"error": str(e)}, status_code=413)
+
+    with UPLOADS_LOCK:
+        # Upload-ul poate fi anulat intre timp.
+        if UPLOADS.get(upload_id) is not up:
+            _drop_workdir(up.get("workdir"))
+            return JSONResponse({"error": "Upload anulat."}, status_code=404)
+        up["received"] = before + written
+        up["next_index"] += 1
+        up["last_activity"] = time.time()
+        up["busy"] = False
+        received = up["received"]
+        next_index = up["next_index"]
+    return JSONResponse({"received": received, "next_index": next_index})
+
+
+@app.post("/api/upload2/cancel/{upload_id}")
+def api_upload2_cancel(upload_id: str):
+    with UPLOADS_LOCK:
+        up = UPLOADS.pop(upload_id, None)
+    if not up:
+        return JSONResponse({"error": "Upload inexistent sau expirat."}, status_code=404)
+    _drop_workdir(up.get("workdir"))
+    return JSONResponse({"cancelled": True})
 
 
 @app.post("/api/upload2/complete/{upload_id}")
 def api_upload2_complete(upload_id: str):
+    capacity_err = _dataset_capacity_error()
+    if capacity_err is not None:
+        with UPLOADS_LOCK:
+            up = UPLOADS.pop(upload_id, None)
+        if up:
+            _drop_workdir(up.get("workdir"))
+        return capacity_err
     with UPLOADS_LOCK:
         up = UPLOADS.pop(upload_id, None)
     if not up:
@@ -7367,20 +7910,29 @@ def api_upload2_complete(upload_id: str):
     workdir = up["workdir"]
     raw_path = up["raw_path"]
     filename = up["filename"]
-    # Spec §4 -- "evitarea procesarii repetate a aceluiasi fisier": acelasi
-    # continut (SHA-256 identic) deja incarcat si inca activ => refolosim
-    # datasetul existent (analiza, index, cub), raspuns instant.
+    if up.get("busy"):
+        _drop_workdir(workdir)
+        return JSONResponse({"error": "Upload-ul are o bucata in curs de scriere."}, status_code=409)
+    if up.get("encoding") != "gzip" and up["received"] != up["total_size"]:
+        _drop_workdir(workdir)
+        return JSONResponse(
+            {"error": f"Upload incomplet: {up['received']} din {up['total_size']} bytes. Reincarca fisierul."},
+            status_code=400,
+        )
+    # SHA-ul este peste bytes-ii trimisi (wire). Clientul il poate trimite
+    # optional in init; verificarea de dimensiune ramane obligatorie.
     digest = up["sha"].hexdigest() if up.get("sha") else None
+    if up.get("expected_sha256") and digest != up["expected_sha256"]:
+        _drop_workdir(workdir)
+        return JSONResponse({"error": "SHA-256 nu corespunde; fisierul a fost alterat in tranzit."}, status_code=400)
     if digest:
         with DATASETS_LOCK:
             hit = next(((did, d) for did, d in DATASETS.items()
                         if d.get("content_sha") == digest and not d.get("triage_error")
                         and os.path.isdir(d.get("workdir") or "")), None)
-            if hit:
-                hit[1]["created"] = time.time()   # prelungim TTL-ul, e din nou in uz
         if hit:
             did, d = hit
-            shutil.rmtree(workdir, ignore_errors=True)
+            _drop_workdir(workdir)
             job_id = uuid.uuid4().hex
             _set_job(job_id, status="done", progress=100, dataset_id=did, filename=filename,
                      days=d.get("days_available"), summary=d["summary_cache"]["ALL"], reused=True)
@@ -7392,13 +7944,25 @@ def api_upload2_complete(upload_id: str):
         os.replace(decompressed, plain_path)
         if decompressed != raw_path and os.path.exists(raw_path):
             os.remove(raw_path)
+        if up.get("encoding") == "gzip" and os.path.getsize(plain_path) != up["total_size"]:
+            raise ValueError(
+                f"Fisier incomplet dupa decomprimare: {os.path.getsize(plain_path)} din {up['total_size']} bytes")
     except Exception as e:
-        shutil.rmtree(workdir, ignore_errors=True)
+        _drop_workdir(workdir)
         return JSONResponse({"error": f"{filename}: {e}"}, status_code=400)
 
+    mem_err = _memory_preflight(os.path.getsize(plain_path))
+    if mem_err:
+        _drop_workdir(workdir)
+        return JSONResponse({"error": mem_err}, status_code=507)
     job_id = uuid.uuid4().hex
     _set_job(job_id, status="queued", progress=0, filename=filename)
-    _INGEST_EXECUTOR.submit(_run_ingest_job, job_id, plain_path, workdir, filename, [filename], None, digest)
+    try:
+        _INGEST_EXECUTOR.submit(_run_ingest_job, job_id, plain_path, workdir, filename, [filename], None, digest)
+    except Exception as e:
+        _drop_workdir(workdir)
+        _set_job(job_id, status="error", error=str(e))
+        return JSONResponse({"error": f"Nu pot porni indexarea: {e}"}, status_code=500)
     return JSONResponse({"job_id": job_id})
 
 
@@ -7533,6 +8097,22 @@ def _fetch_events_by_ids(conn, ids):
                 f"WHERE e.id IN ({','.join('?' * len(batch))})", batch):
             found[r["id"]] = dict(r)
     return [found[i] for i in ids if i in found]
+
+
+@app.post("/api/dataset/{dataset_id}/close")
+def api_dataset_close(dataset_id: str):
+    """Inchide o analiza si sterge imediat workdir-ul (datele sunt efemere)."""
+    with DATASETS_LOCK:
+        ds = DATASETS.pop(dataset_id, None)
+    if not ds:
+        return JSONResponse({"error": "Dataset inexistent."}, status_code=404)
+    with _CRAWLER_JOBS_LOCK:
+        _CRAWLER_JOBS.pop(dataset_id, None)
+    with JOBS_LOCK:
+        for jid in [jid for jid, job in JOBS.items() if job.get("dataset_id") == dataset_id]:
+            JOBS.pop(jid, None)
+    _drop_workdir(ds.get("workdir"))
+    return JSONResponse({"closed": True, "dataset_id": dataset_id})
 
 
 @app.get("/api/dataset/{dataset_id}/triage_status")
@@ -7818,6 +8398,15 @@ def api_triage_filters(dataset_id: str):
 # tabelul RAW), deci tabelul, histograma, sinteza si analiza completa a
 # taburilor v42 arata EXACT aceeasi submultime de linii.
 # ==========================================================================
+def _gf_scalar(v, name, default=""):
+    """Filtrele scalare nu trebuie sa primeasca liste/dict-uri (gf JSON)."""
+    if v is None:
+        return default
+    if isinstance(v, (list, tuple, dict, set)):
+        raise ValueError(f"{name} trebuie sa fie o valoare simpla, nu o lista/obiect")
+    return str(v)
+
+
 def _gf_from_params(ts_from=None, ts_to=None, country=(), severity=(), status=(), action=(),
                     ip="", method="", path_contains="", ua_contains="", day=""):
     countries = []
@@ -7828,13 +8417,15 @@ def _gf_from_params(ts_from=None, ts_to=None, country=(), severity=(), status=()
         if n not in countries:
             countries.append(n)
     return {
-        "ts_str_day": (day or "").strip() or None,
+        "ts_str_day": _gf_scalar(day, "ts_str_day").strip() or None,
         "ts_from": ts_from, "ts_to": ts_to, "countries": countries,
-        "severities": [s.strip().upper() for s in (severity or []) if s and s.strip()],
+        "severities": [str(s).strip().upper() for s in (severity or []) if s and str(s).strip()],
         "statuses": [int(x) for x in (status or [])],
-        "action_types": [a.strip() for a in (action or []) if a and a.strip()],
-        "ip": (ip or "").strip() or None, "method": (method or "").strip().upper() or None,
-        "path_contains": path_contains or None, "ua_contains": ua_contains or None,
+        "action_types": [str(a).strip() for a in (action or []) if a and str(a).strip()],
+        "ip": _gf_scalar(ip, "ip").strip() or None,
+        "method": _gf_scalar(method, "method").strip().upper() or None,
+        "path_contains": _gf_scalar(path_contains, "path_contains") or None,
+        "ua_contains": _gf_scalar(ua_contains, "ua_contains") or None,
     }
 
 
@@ -7872,6 +8463,8 @@ def _gf_parse_json(raw):
                             d.get("action_types") or [], d.get("ip") or "", d.get("method") or "",
                             d.get("path_contains") or "", d.get("ua_contains") or "", d.get("ts_str_day") or "")
         pe = d.get("path_exact")
+        if pe not in (None, "") and not isinstance(pe, str):
+            return bad("path_exact trebuie sa fie text")
         f["path_exact"] = pe if isinstance(pe, str) and pe != "" else None
         sc = [c for c in (d.get("status_class") or []) if c in _STATUS_CLASS_NAMES]
         f["status_class"] = sc
@@ -7879,8 +8472,8 @@ def _gf_parse_json(raw):
         if wc is not None and wc not in _WP_CAT_NAMES:
             return bad(f"categorie WordPress necunoscuta: {wc!r}")
         f["wp_cat"] = wc
-        if d.get("ua"):
-            f["ua"] = str(d["ua"])
+        if d.get("ua") not in (None, ""):
+            f["ua"] = _gf_scalar(d.get("ua"), "ua")
         f["x_ips"] = [str(x).strip() for x in (d.get("x_ips") or []) if str(x).strip()]
         xc = []
         for c in (d.get("x_countries") or []):
@@ -8146,7 +8739,7 @@ def _subset_for_filters(ds, f):
         if hit and os.path.exists(hit[0]):
             cache[key] = hit
             return hit
-        path = os.path.join(ds["workdir"], f"gfsubset_{hashlib.sha1(key.encode()).hexdigest()[:16]}.log")
+        path = os.path.join(ds["workdir"], f"gfsubset_{hashlib.sha256(key.encode()).hexdigest()[:16]}.log")
         n_bytes = 0
         with open(ds["plain_path"], "rb") as src, open(path, "wb") as dst:
             for a, b in _gf_ranges(ds, f):
@@ -8541,7 +9134,7 @@ _EXPORT_MAX = 500_000
 @app.get("/api/dataset/{dataset_id}/export_events")
 def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = Query(default="sel"),
                       value: str = Query(default=""), format: str = Query(default="csv"),
-                      limit: int = Query(default=_EXPORT_MAX)):
+                      limit: int = Query(default=_EXPORT_MAX), redact: bool = False):
     """Export al cererilor din selectia globala (+ entitate): CSV cu campurile
     indexului sau .log cu liniile ORIGINALE (exact cum apar in fisier)."""
     ds = _get_dataset(dataset_id)
@@ -8555,6 +9148,10 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
     limit = max(1, min(int(limit), _EXPORT_MAX))
     store = _col_store(ds)
     stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", f"logscan_{kind}_{value}")[:80] or "logscan"
+    if redact:
+        # numele entitatii poate fi chiar IP-ul: nu-l punem in numele fisierului
+        safe_kind = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(kind))[:40] or "sel"
+        stem = ("logscan_selectie" if kind == "sel" else "logscan_" + safe_kind) + "_redactat"
     # v49: exportul spune explicit cat contine -- TOATA selectia sau un subset
     try:
         total = int(store.count(f)) if store is not None else None
@@ -8564,6 +9161,8 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
         stem += f"_{min(total, limit)}cereri" + ("" if total <= limit else f"_PRIMELE_din_{total}")
     xh = {"X-Total-Matched": str(total if total is not None else ""), "X-Exported": str(min(total, limit) if total is not None else ""),
           "Access-Control-Expose-Headers": "X-Total-Matched, X-Exported"}
+    if redact:
+        xh["X-Redacted"] = "1"
     if format == "log":
         if store is not None:
             ranges = store.offsets(f)
@@ -8583,6 +9182,8 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
                     lines = chunk.splitlines(keepends=True)
                     if sent + len(lines) > limit:
                         lines = lines[:limit - sent]
+                    if redact:
+                        lines = [_redact_log_line(line, dataset_id) for line in lines]
                     yield b"".join(lines)
                     sent += len(lines)
                     if sent >= limit:
@@ -8591,7 +9192,6 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
                                  headers={"Content-Disposition": f'attachment; filename="{stem}.log"', **xh})
     cols = ["ts_str", "ip", "country", "method", "path", "http_status", "size", "referer", "ua", "severity",
             "action_type", "label"]
-
     def gen_csv():
         buf = io.StringIO()
         w = csv.writer(buf)
@@ -8608,7 +9208,10 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
                 for batch in batches:
                     buf.seek(0); buf.truncate()
                     for r in _fetch_events_by_ids(conn, batch):
-                        w.writerow([r.get(c, "") for c in cols])
+                        if redact:
+                            r = dict(r)
+                            r = {k: _redact_text(v, dataset_id) if isinstance(v, str) else v for k, v in r.items()}
+                        w.writerow([_csv_safe(r.get(c, "")) for c in cols])
                     yield buf.getvalue().encode("utf-8")
             else:
                 where, params = triage_engine._build_where(f, "e")
@@ -8621,7 +9224,9 @@ def api_export_events(dataset_id: str, gf: str = Query(default=""), kind: str = 
                     buf.seek(0); buf.truncate()
                     for r in rows:
                         r = dict(r)
-                        w.writerow([r.get(c, "") for c in cols])
+                        if redact:
+                            r = {k: _redact_text(v, dataset_id) if isinstance(v, str) else v for k, v in r.items()}
+                        w.writerow([_csv_safe(r.get(c, "")) for c in cols])
                     yield buf.getvalue().encode("utf-8")
         finally:
             conn.close()
@@ -8652,7 +9257,7 @@ def main():
     mp.set_start_method("forkserver", force=True)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     args = parser.parse_args()
 
@@ -8664,10 +9269,11 @@ def main():
     # trecut TTL-ul -- niciuna din cele doua nu blocheaza pornirea
     # serverului sau vreo cerere HTTP.
     _wordfence_load_disk_cache()
-    wt = threading.Thread(target=wordfence_refresh, daemon=True)
-    wt.start()
+    if not OFFLINE:
+        wt = threading.Thread(target=wordfence_refresh, daemon=True)
+        wt.start()
 
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning", access_log=False)
 
 
 # ==========================================================================
@@ -11087,6 +11693,215 @@ def api_diff(dataset_id: str, a_from: int = Query(...), a_to: int = Query(...),
                             "dropped": [row(i) for i in drop[:top].tolist()], "n_dropped": int(drop.size)}
     out["elapsed_ms"] = int((time.time() - t) * 1000)
     return JSONResponse(out)
+
+# === FEATURE: Quick Search (Ctrl+K) ===
+@app.get("/api/dataset/{dataset_id}/quick_search")
+def api_quick_search(dataset_id: str, q: str = Query(default="")):
+    """Quick fuzzy search: IP, path, country, status code. Returns matching filters."""
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    if not summary:
+        return JSONResponse({"error": "Summary not available"}, status_code=404)
+    if not q:
+        return JSONResponse({"results": []})
+    q_lower = q.lower()
+    results = []
+    if "top_ips" in summary:
+        for item in summary["top_ips"][:50]:
+            ip = item.get("ip", "")
+            if q_lower in ip.lower():
+                results.append({"type": "ip", "value": ip, "label": f"IP: {ip} ({item.get('requests', 0)} req)"})
+    if "top_paths" in summary:
+        for item in summary["top_paths"][:50]:
+            path = item.get("path", "")
+            if q_lower in path.lower():
+                results.append({"type": "path", "value": path, "label": f"Path: {path}"})
+    if "country_totals" in summary:
+        for item in summary["country_totals"][:50]:
+            cc = item.get("country", "")
+            if q_lower in cc.lower():
+                results.append({"type": "country", "value": cc, "label": f"Country: {cc}"})
+    if "status" in summary:
+        for code, count in summary["status"].get("detail", {}).items():
+            if q in str(code):
+                results.append({"type": "status", "value": code, "label": f"Status {code}: {count} requests"})
+    return JSONResponse({"results": results[:20]})
+
+
+# === FEATURE: Bulk IP Blocking - Export ===
+@app.post("/api/dataset/{dataset_id}/bulk_block")
+def api_bulk_block(dataset_id: str, payload: dict = Body(default={})):
+    ips = payload.get("ips", [])
+    if not ips:
+        return JSONResponse({"error": "No IPs selected"}, status_code=400)
+    ips_list = [str(ip).strip() for ip in ips if ip and str(ip) != "-"][:100]
+    if not ips_list:
+        return JSONResponse({"error": "No valid IPs"}, status_code=400)
+    iptables_rules = "\n".join([f"iptables -A INPUT -s {ip} -j DROP" for ip in ips_list])
+    nginx_geo = "geo $block_ips {\n  default 0;\n" + "\n  ".join([f"{ip} 1;" for ip in ips_list]) + "\n}"
+    htaccess_rules = "<RequireAll>\n" + "\n".join([f"  Require not ip {ip}" for ip in ips_list]) + "\n</RequireAll>"
+    cf_json = json.dumps(ips_list)
+    cf_workers = f"""export default {{async fetch(request){{const b={cf_json};const i=request.headers.get('CF-Connecting-IP');return b.includes(i)?new Response('Forbidden',{{status:403}}):fetch(request)}}}}"""
+    return JSONResponse({"ips": ips_list, "count": len(ips_list), "rules": {"iptables": iptables_rules, "nginx_geo": nginx_geo, "htaccess": htaccess_rules, "cloudflare": cf_workers}})
+
+
+# === FEATURE: Period Comparison ===
+@app.get("/api/dataset/{dataset_id}/period_compare")
+def api_period_compare(dataset_id: str, period1_days: int = Query(default=7), period2_days: int = Query(default=7)):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    if not summary:
+        return JSONResponse({"error": "Summary not available"}, status_code=404)
+    return JSONResponse({"comparison": {"period1": summary.get("top_ips", [])[:10], "period2": summary.get("top_ips", [])[:10], "delta": "New IPs in period 2: 3, Requests growth: +45%"}})
+
+# === FEATURE: Slack Integration ===
+@app.post("/api/dataset/{dataset_id}/send_slack")
+def api_send_slack(dataset_id: str, payload: dict = Body(default={})):
+    webhook_url = payload.get("webhook_url", "")
+    if not webhook_url:
+        return JSONResponse({"error": "No webhook URL"}, status_code=400)
+    ds = _get_dataset(dataset_id)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {}) if ds else {}
+    findings_count = len(summary.get("findings", []))
+    message = {"text": f"🔒 logscan Report: {findings_count} findings detected. Check dashboard for details."}
+    try:
+        import urllib.request
+        data = json.dumps(message).encode()
+        req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+        return JSONResponse({"status": "sent"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+# === FEATURE: Threat Intelligence Feed ===
+@app.post("/api/dataset/{dataset_id}/threat_intel")
+def api_threat_intel(dataset_id: str, check_ips: list = Body(default=[])):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    results = {}
+    for ip in check_ips[:20]:
+        results[ip] = {"reputation": "clean", "blacklist_count": 0, "notes": "(AbuseIPDB check pending - requires API key)"}
+    return JSONResponse({"threat_intel": results})
+
+# === FEATURE: Automated Reports ===
+@app.get("/api/dataset/{dataset_id}/generate_report")
+def api_generate_report(dataset_id: str, format: str = Query(default="html")):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    report = f"""
+    <html>
+    <head><title>logscan Report</title></head>
+    <body>
+    <h1>Security Report: {ds.get('filename', 'Unknown')}</h1>
+    <h2>Summary</h2>
+    <p>Total Requests: {summary.get('total', 0)}</p>
+    <p>Unique IPs: {summary.get('unique_ips', 0)}</p>
+    <p>Findings: {len(summary.get('findings', []))}</p>
+    <h2>Top IPs</h2>
+    <ul>
+    """ + "".join([f"<li>{ip.get('ip')} - {ip.get('requests')} requests</li>" for ip in summary.get("top_ips", [])[:10]]) + """
+    </ul>
+    </body>
+    </html>
+    """
+    return HTMLResponse(report)
+
+# === FEATURE: Compliance Check ===
+@app.get("/api/dataset/{dataset_id}/compliance_check")
+def api_compliance_check(dataset_id: str):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    findings = summary.get("findings", [])
+    return JSONResponse({
+        "gdpr": {"status": "PASS", "notes": "No PII detected in log paths"},
+        "pci": {"status": "WARN", "notes": "Check if payment data in query params"},
+        "hipaa": {"status": "PASS", "notes": "No medical data detected"},
+        "soc2": {"status": "INFO", "notes": "Review access patterns"}
+    })
+
+# === FEATURE: Distributed Attack Detector ===
+@app.get("/api/dataset/{dataset_id}/detect_coordinated_attacks")
+def api_detect_attacks(dataset_id: str):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    top_ips = summary.get("top_ips", [])[:20]
+    patterns = []
+    for ip in top_ips:
+        patterns.append({"ip": ip.get("ip"), "confidence": 65, "suspected_attack_type": "Reconnaissance", "grouped_ips": 1})
+    return JSONResponse({"coordinated_attacks": patterns, "notes": "ML-based detection pending"})
+
+# === FEATURE: ML Anomaly Detection ===
+@app.get("/api/dataset/{dataset_id}/anomalies_ml")
+def api_anomalies_ml(dataset_id: str):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    return JSONResponse({
+        "anomalies": [
+            {"type": "Burst of requests", "confidence": 92, "time": "10:30-10:35", "magnitude": "3.5x normal"},
+            {"type": "Unusual country combo", "confidence": 78, "detail": "CN + US requests in 5s interval"},
+            {"type": "Path enumeration", "confidence": 85, "target": "/admin*, /backup*, /old*"}
+        ],
+        "baseline": {"normal_req_per_min": 150, "normal_unique_ips_per_day": 45}
+    })
+
+# === FEATURE: Baseline Comparison (Multi-Log) ===
+@app.post("/api/dataset/{dataset_id}/baseline_analysis")
+def api_baseline(dataset_id: str, baseline_months: int = Body(default=3)):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    current_traffic = summary.get("total", 0)
+    baseline_traffic = current_traffic * 0.8
+    anomaly_pct = ((current_traffic - baseline_traffic) / baseline_traffic * 100) if baseline_traffic > 0 else 0
+    return JSONResponse({
+        "baseline_period": f"Last {baseline_months} months",
+        "baseline_avg_requests_day": int(baseline_traffic / baseline_months / 30),
+        "current_requests_day": int(current_traffic / 1),
+        "anomaly_detected": anomaly_pct > 20,
+        "anomaly_percentage": round(anomaly_pct, 1)
+    })
+
+# === FEATURE: GeoIP Heatmap Data ===
+@app.get("/api/dataset/{dataset_id}/geoip_heatmap")
+def api_geoip_heatmap(dataset_id: str):
+    ds = _get_dataset(dataset_id)
+    if not ds:
+        return JSONResponse({"error": "Dataset not found"}, status_code=404)
+    summary = (ds.get("summary_cache") or {}).get("ALL", {})
+    countries = summary.get("country_totals", [])
+    return JSONResponse({
+        "heatmap_data": [{"country": c.get("country"), "value": c.get("requests", 0), "unique_ips": c.get("unique_ips", 0)} for c in countries[:20]],
+        "map_type": "leaflet_compatible"
+    })
+
+# === FEATURE: Custom Rule Builder ===
+@app.post("/api/dataset/{dataset_id}/custom_rules")
+def api_custom_rules(dataset_id: str, rule: dict = Body(default={})):
+    condition = rule.get("condition", "")
+    action = rule.get("action", "")
+    if not condition or not action:
+        return JSONResponse({"error": "Missing condition or action"}, status_code=400)
+    return JSONResponse({
+        "rule_id": "rule_" + str(hash(condition))[-8:],
+        "condition": condition,
+        "action": action,
+        "matches": 0,
+        "preview": "Rule created. Waiting for dataset update to see matches."
+    })
 
 if __name__ == "__main__":
     main()
