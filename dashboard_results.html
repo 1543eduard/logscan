@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>LOGSCAN - Analysis Results</title>
+    <script>
+        // FORCE LOAD - redirect if no dataset ID
+        const params = new URLSearchParams(window.location.search);
+        const datasetId = params.get('id');
+
+        if (!datasetId) {
+            window.location.replace('/');
+        }
+    </script>
+</head>
+<body>
+    <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h1>📊 Loading Analysis...</h1>
+        <p>Please wait while we load your analysis results...</p>
+        <div style="margin-top: 30px;">
+            <div style="width: 300px; height: 20px; background: #e0e0e0; border-radius: 10px; margin: 0 auto;">
+                <div style="height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); width: 30%; border-radius: 10px; animation: progress 1.5s ease-in-out infinite;"></div>
+            </div>
+        </div>
+        <p style="margin-top: 30px; color: #666;">Dataset ID: <code id="id-display"></code></p>
+    </div>
+
+    <style>
+        @keyframes progress {
+            0% { width: 10%; }
+            50% { width: 70%; }
+            100% { width: 90%; }
+        }
+    </style>
+
+    <script>
+        // Display the ID
+        document.getElementById('id-display').textContent = datasetId;
+
+        // Load the full dashboard
+        fetch(`/api/dataset/${encodeURIComponent(datasetId)}/summary`)
+            .then(r => {
+                if (!r.ok) throw new Error('Dataset not found');
+                return r.json();
+            })
+            .then(summary => {
+                // Store in sessionStorage and redirect to dashboard
+                sessionStorage.setItem('logscan_dataset_id', datasetId);
+                sessionStorage.setItem('logscan_dataset_summary', JSON.stringify(summary));
+
+                // Redirect to dashboard
+                window.location.replace('/dashboard?id=' + encodeURIComponent(datasetId));
+            })
+            .catch(err => {
+                alert('Error loading dataset: ' + err.message);
+                window.location.replace('/');
+            });
+    </script>
+</body>
+</html>

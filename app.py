@@ -5600,38 +5600,23 @@ def index():
 
 @app.get("/rezultate", response_class=HTMLResponse)
 def results_page(id: str = Query(default="")):
-    # Verify dataset exists before showing dashboard
-    if id:
-        ds = _get_dataset(id)
-        if not ds:
-            # Dataset not found - redirect to upload
-            return HTMLResponse(
-                "<html><head><meta http-equiv='refresh' content='0; url=/?error=Dataset+expirat' /></head></html>",
-                status_code=302
-            )
-    else:
-        # No dataset ID - redirect to upload
-        return HTMLResponse(
-            "<html><head><meta http-equiv='refresh' content='0; url=/' /></head></html>",
-            status_code=302
-        )
+    # Serve simple loading page that handles dataset loading
+    results_path = os.path.join(APP_DIR, "dashboard_results.html")
+    if os.path.exists(results_path):
+        with open(results_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read(), headers={"Cache-Control": "no-store"})
+    return HTMLResponse("<h1>Loading...</h1>", status_code=200)
 
-    # Dataset exists - serve dashboard
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_page(id: str = Query(default="")):
+    # Full dashboard with all features
     dash_path = os.path.join(APP_DIR, "dashboard.html")
     if os.path.exists(dash_path):
         with open(dash_path, "r", encoding="utf-8") as f:
             html = f.read().replace("?v=52.1", f"?v={LOGSCAN_VERSION}")
             return HTMLResponse(html, headers={"Cache-Control": "no-store"})
     return HTMLResponse("<h1>dashboard.html lipseste</h1>", status_code=500)
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard_page():
-    # Backwards compatibility - redirect to /rezultate
-    return HTMLResponse(
-        "<html><head><meta http-equiv='refresh' content='0; url=/rezultate' /></head><body>Redirecting...</body></html>",
-        status_code=302
-    )
 
 
 @app.get("/upload", response_class=HTMLResponse)
