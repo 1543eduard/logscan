@@ -12628,6 +12628,189 @@ window.IP_REPUTATION_SUMMARY = {
   }
 };
 
+// FEATURE 21: REFERRER ANALYSIS (DATA-AWARE)
+window.REFERRER_ANALYSIS = {
+  show: function() {
+    const refElements = document.querySelectorAll('[data-referrer]');
+    const refMap = new Map();
+
+    refElements.forEach(el => {
+      const ref = el.dataset.referrer || 'Direct';
+      refMap.set(ref, (refMap.get(ref) || 0) + 1);
+    });
+
+    if (refMap.size === 0) {
+      alert('No referrer data found.');
+      return;
+    }
+
+    const sorted = Array.from(refMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15);
+
+    let msg = `🔗 TOP REFERRERS\n\n`;
+    const total = refElements.length;
+
+    sorted.forEach((entry, i) => {
+      const ref = entry[0] === '-' ? '(Direct)' : entry[0];
+      const count = entry[1];
+      const pct = ((count / total) * 100).toFixed(1);
+      msg += `${i+1}. ${ref}\n`;
+      msg += `   ${count} (${pct}%)\n`;
+    });
+
+    alert(msg);
+  }
+};
+
+// FEATURE 22: PATH PARAMETER ANALYSIS (DATA-AWARE)
+window.PATH_PARAMS = {
+  show: function() {
+    const pathElements = document.querySelectorAll('[data-path]');
+    const paramMap = new Map();
+    let withParams = 0;
+    let total = 0;
+
+    pathElements.forEach(el => {
+      const path = el.dataset.path || '';
+      total++;
+      if (path.includes('?')) {
+        withParams++;
+        const paramString = path.split('?')[1];
+        paramMap.set(paramString, (paramMap.get(paramString) || 0) + 1);
+      }
+    });
+
+    let msg = `❓ URL PARAMETERS\n\n`;
+    msg += `Requests with params: ${withParams}/${total} (${((withParams/total)*100).toFixed(1)}%)\n`;
+    msg += `Unique parameters: ${paramMap.size}\n\n`;
+
+    if (paramMap.size > 0) {
+      const sorted = Array.from(paramMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+      msg += 'Top parameters:\n';
+      sorted.forEach((entry, i) => {
+        msg += `${i+1}. ${entry[0]}\n`;
+        msg += `   (${entry[1]} times)\n`;
+      });
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 23: ERROR RATE ANALYSIS (DATA-AWARE)
+window.ERROR_RATE = {
+  show: function() {
+    const statusElements = document.querySelectorAll('[data-status]');
+    let errors4xx = 0;
+    let errors5xx = 0;
+    let success = 0;
+    const total = statusElements.length;
+
+    statusElements.forEach(el => {
+      const status = el.dataset.status;
+      if (status && status.startsWith('4')) errors4xx++;
+      else if (status && status.startsWith('5')) errors5xx++;
+      else success++;
+    });
+
+    const errorRate = ((errors4xx + errors5xx) / total * 100).toFixed(2);
+
+    let msg = `📉 ERROR RATE ANALYSIS\n\n`;
+    msg += `Total Requests: ${total}\n`;
+    msg += `Success (2xx): ${success} (${((success/total)*100).toFixed(1)}%)\n`;
+    msg += `Client Errors (4xx): ${errors4xx} (${((errors4xx/total)*100).toFixed(1)}%)\n`;
+    msg += `Server Errors (5xx): ${errors5xx} (${((errors5xx/total)*100).toFixed(1)}%)\n\n`;
+    msg += `Overall Error Rate: ${errorRate}%\n\n`;
+
+    if (errorRate > 10) {
+      msg += '🚨 HIGH ERROR RATE - investigate issues';
+    } else if (errorRate > 5) {
+      msg += '⚠️  Elevated error rate - monitor';
+    } else {
+      msg += '✅ Error rate within normal range';
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 24: CACHED VS DYNAMIC (DATA-AWARE)
+window.CACHE_ANALYSIS = {
+  show: function() {
+    const pathElements = document.querySelectorAll('[data-path]');
+    const staticExts = ['.css', '.js', '.jpg', '.png', '.gif', '.ico', '.svg', '.woff', '.ttf'];
+    let staticRequests = 0;
+    let dynamicRequests = 0;
+
+    pathElements.forEach(el => {
+      const path = (el.dataset.path || '').toLowerCase();
+      const isStatic = staticExts.some(ext => path.endsWith(ext));
+      if (isStatic) staticRequests++;
+      else dynamicRequests++;
+    });
+
+    const total = staticRequests + dynamicRequests;
+
+    let msg = `💾 STATIC VS DYNAMIC\n\n`;
+    msg += `Static Content: ${staticRequests} (${((staticRequests/total)*100).toFixed(1)}%)\n`;
+    msg += `Dynamic Content: ${dynamicRequests} (${((dynamicRequests/total)*100).toFixed(1)}%)\n`;
+    msg += `Total: ${total} requests\n\n`;
+
+    if (staticRequests > dynamicRequests) {
+      msg += '✅ Good - mostly static (cacheable)';
+    } else {
+      msg += '⚠️  Dynamic heavy - implement caching';
+    }
+
+    alert(msg);
+  }
+};
+
+// FEATURE 25: ATTACK SEVERITY DISTRIBUTION (DATA-AWARE)
+window.SEVERITY_DISTRIBUTION = {
+  show: function() {
+    const findings = document.querySelectorAll('[data-severity]');
+    const severityMap = new Map();
+
+    findings.forEach(el => {
+      const severity = el.dataset.severity || 'UNKNOWN';
+      severityMap.set(severity, (severityMap.get(severity) || 0) + 1);
+    });
+
+    if (severityMap.size === 0) {
+      alert('No severity data found.');
+      return;
+    }
+
+    let msg = `📊 ATTACK SEVERITY DISTRIBUTION\n\n`;
+    const total = findings.length;
+
+    const order = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+    const icons = { 'CRITICAL': '🚨', 'HIGH': '⚠️ ', 'MEDIUM': '📌', 'LOW': '📝', 'INFO': 'ℹ️ ' };
+
+    let cumulativeRisk = 0;
+    order.forEach(sev => {
+      if (severityMap.has(sev)) {
+        const count = severityMap.get(sev);
+        const pct = ((count / total) * 100).toFixed(1);
+        const weight = sev === 'CRITICAL' ? 100 : sev === 'HIGH' ? 50 : sev === 'MEDIUM' ? 10 : 1;
+        cumulativeRisk += count * weight;
+
+        const bar = '█'.repeat(Math.ceil(pct / 5));
+        msg += `${icons[sev]} ${sev.padEnd(10)}: ${count.toString().padStart(4)} (${pct.padStart(5)}%) ${bar}\n`;
+      }
+    });
+
+    msg += `\nTotal findings: ${total}`;
+    msg += `\nRisk Score: ${cumulativeRisk} (higher = more severe)`;
+    alert(msg);
+  }
+};
+
 // Initialize features on page load
 document.addEventListener('DOMContentLoaded', () => {
   THEME.init();
@@ -12668,6 +12851,11 @@ const initFeatureButtons = () => {
     { text: '⏰ Frequency', onclick: () => FREQUENCY_TIMELINE.show() },
     { text: '🔍 User Agents', onclick: () => USERAGENT_ANALYSIS.show() },
     { text: '🌐 IP Reputation', onclick: () => IP_REPUTATION_SUMMARY.show() },
+    { text: '🔗 Referrers', onclick: () => REFERRER_ANALYSIS.show() },
+    { text: '❓ Parameters', onclick: () => PATH_PARAMS.show() },
+    { text: '📉 Error Rate', onclick: () => ERROR_RATE.show() },
+    { text: '💾 Cache Analysis', onclick: () => CACHE_ANALYSIS.show() },
+    { text: '📊 Severity', onclick: () => SEVERITY_DISTRIBUTION.show() },
     { text: '❓ Help (?)', onclick: () => HELP.show() }
   ];
 
