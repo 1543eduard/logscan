@@ -11936,7 +11936,7 @@ showPage = function () { const r = _v511Show.apply(this, arguments); selTrayRend
 // WORKING FEATURES v52.1+ - DATA-AWARE & FUNCTIONAL
 // ============================================================================
 
-// FEATURE 1: DARK MODE (WORKING ✅)
+// FEATURE 1: DARK MODE (WORKING)
 window.THEME = {
   init: function() {
     const savedTheme = localStorage.getItem('logscan_theme') || 'dark';
@@ -11970,7 +11970,7 @@ window.THEME = {
   applyTheme: function(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     if (this.themeBtn) {
-      this.themeBtn.innerHTML = theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode';
+      this.themeBtn.innerHTML = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
     }
   }
 };
@@ -12036,55 +12036,298 @@ window.EXPORT_VIEW = {
   }
 };
 
-// FEATURE 5: HELP & KEYBOARD SHORTCUTS ✅
+// =======================
+// WORKING FEATURES v2 - Extract from actual visible data
+// =======================
+
+// TABLE ANALYSIS ENGINE
+window.TABLE_FEATURES = {
+  getTableData: function() {
+    const tables = document.querySelectorAll('table tbody');
+    const data = [];
+    tables.forEach(table => {
+      table.querySelectorAll('tr').forEach(row => {
+        const cells = Array.from(row.querySelectorAll('td, th')).map(c => c.textContent.trim());
+        data.push(cells);
+      });
+    });
+    return data;
+  }
+};
+
+// FEATURE 2: DATA SUMMARY
+window.DATA_SUMMARY = {
+  show: function() {
+    const data = TABLE_FEATURES.getTableData();
+    let msg = "DATA SUMMARY\n\n";
+    msg += "Rows visible: " + data.length + "\n";
+    msg += "Tables found: " + document.querySelectorAll('table').length + "\n";
+    if (data.length > 0) {
+      msg += "Columns per row: " + data[0].length + "\n\n";
+      msg += "Data is loaded and ready for analysis";
+    } else {
+      msg += "\nNo data visible - Upload a log file first";
+    }
+    alert(msg);
+  }
+};
+
+// FEATURE 3: EXTRACT IPs
+window.EXTRACT_IPS = {
+  show: function() {
+    const ipSet = new Set();
+    const data = TABLE_FEATURES.getTableData();
+    const ipRegex = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/g;
+
+    data.forEach(row => {
+      row.forEach(cell => {
+        const matches = cell.match(ipRegex);
+        if (matches) matches.forEach(ip => ipSet.add(ip));
+      });
+    });
+
+    let msg = "IPs FOUND: " + ipSet.size + " unique\n\n";
+    Array.from(ipSet).slice(0, 20).forEach((ip, i) => {
+      msg += (i+1) + ". " + ip + "\n";
+    });
+    if (ipSet.size > 20) msg += "\n... and " + (ipSet.size - 20) + " more";
+    alert(msg);
+  }
+};
+
+// FEATURE 4: EXTRACT PATHS
+window.EXTRACT_PATHS = {
+  show: function() {
+    const pathSet = new Set();
+    const data = TABLE_FEATURES.getTableData();
+
+    data.forEach(row => {
+      row.forEach(cell => {
+        if (cell.includes('/') && cell.length < 200) {
+          const match = cell.match(/\/[^\s]*/);
+          if (match) pathSet.add(match[0]);
+        }
+      });
+    });
+
+    let msg = "PATHS FOUND: " + pathSet.size + " unique\n\n";
+    Array.from(pathSet).slice(0, 20).forEach((path, i) => {
+      msg += (i+1) + ". " + path + "\n";
+    });
+    if (pathSet.size > 20) msg += "\n... and " + (pathSet.size - 20) + " more";
+    alert(msg);
+  }
+};
+
+// FEATURE 5: HTTP STATUS CODES
+window.HTTP_CODES = {
+  show: function() {
+    const codeMap = new Map();
+    const data = TABLE_FEATURES.getTableData();
+    const regex = /\b([1-5]\d{2})\b/g;
+
+    data.forEach(row => {
+      row.forEach(cell => {
+        const matches = cell.match(regex);
+        if (matches) {
+          matches.forEach(code => {
+            codeMap.set(code, (codeMap.get(code) || 0) + 1);
+          });
+        }
+      });
+    });
+
+    let msg = "HTTP STATUS CODES:\n\n";
+    Array.from(codeMap.entries())
+      .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+      .forEach(([code, count]) => {
+        msg += code + ": " + count + " requests\n";
+      });
+    alert(msg);
+  }
+};
+
+// FEATURE 6: ATTACK PATTERNS
+window.ATTACK_PATTERNS = {
+  show: function() {
+    const data = TABLE_FEATURES.getTableData();
+    const text = data.flat().join(" ").toLowerCase();
+
+    const patterns = {
+      SQL: 0,
+      XSS: 0,
+      'Path Traversal': 0,
+      Admin: 0,
+      Shell: 0
+    };
+
+    if (text.includes('union') || text.includes('select') || text.includes('sql')) patterns.SQL++;
+    if (text.includes('<script') || text.includes('onerror') || text.includes('onclick')) patterns.XSS++;
+    if (text.includes('..') || text.includes('%2e%2e')) patterns['Path Traversal']++;
+    if (text.includes('wp-admin') || text.includes('admin')) patterns.Admin++;
+    if (text.includes('.php') || text.includes('.sh')) patterns.Shell++;
+
+    let msg = "ATTACK PATTERNS DETECTED:\n\n";
+    const found = Object.entries(patterns).filter(p => p[1] > 0);
+
+    if (found.length === 0) {
+      msg += "No suspicious patterns found - Good!";
+    } else {
+      found.forEach(([pattern, count]) => {
+        msg += pattern + ": " + count + " detected\n";
+      });
+    }
+    alert(msg);
+  }
+};
+
+// FEATURE 7: TOP DOMAINS
+window.TOP_DOMAINS = {
+  show: function() {
+    const domainMap = new Map();
+    const data = TABLE_FEATURES.getTableData();
+    const regex = /(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}/gi;
+
+    data.forEach(row => {
+      row.forEach(cell => {
+        const matches = cell.match(regex);
+        if (matches) {
+          matches.forEach(domain => {
+            const key = domain.toLowerCase();
+            domainMap.set(key, (domainMap.get(key) || 0) + 1);
+          });
+        }
+      });
+    });
+
+    let msg = "TOP DOMAINS:\n\n";
+    Array.from(domainMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 15)
+      .forEach(([domain, count], i) => {
+        msg += (i+1) + ". " + domain + " (" + count + ")\n";
+      });
+    alert(msg);
+  }
+};
+
+// FEATURE 8: HELP - Complete Feature Guide
 window.HELP = {
   show: function() {
-    const help = `
-⌨️ LOGSCAN KEYBOARD SHORTCUTS & FEATURES
+    const help = `LOGSCAN - INTERACTIVE FEATURES GUIDE
 
-🌙 DARK MODE
-  • Button in sidebar: Toggle dark/light theme
-  • Preference saved automatically
+1. DARK MODE
+   - Toggle light/dark theme
+   - Preference saved automatically
+   - Click "Dark Mode" button in sidebar
 
-📊 RECOMMENDATIONS
-  • Shows CRITICAL & HIGH findings
-  • Click "Security & Triaj" tab for details
+2. DATA SUMMARY
+   - Shows total rows and tables loaded
+   - Displays data structure info
+   - Confirms if data is ready for analysis
 
-🔍 QUICK FILTERS
-  • See stats on analyzed data
-  • Go to "Workplace" for advanced filters
+3. EXTRACT IPs
+   - Extracts all IP addresses from loaded data
+   - Shows unique IPs count
+   - Lists top 20 IPs found
+   - Useful for identifying sources
 
-📥 EXPORT
-  • Export current table as CSV
-  • All visible data included
+4. EXTRACT PATHS
+   - Finds all URLs/paths in the data
+   - Shows unique paths count
+   - Lists top 20 paths accessed
+   - Helps identify targeted endpoints
 
-🛡️ RECOMMENDED BLOCKS
-  • Shows top IPs to block
-  • Based on security findings
-  • Ready for firewall rules
+5. HTTP STATUS CODES
+   - Analyzes response codes (2xx/3xx/4xx/5xx)
+   - Shows count per code
+   - Helps identify server issues
 
-📈 STATS
-  • Total IPs, Paths, Findings
-  • Summary statistics
-  • Visual breakdown
+6. ATTACK PATTERNS
+   - Detects SQL Injection attempts
+   - Finds XSS attacks
+   - Identifies Path Traversal
+   - Spots Admin panel access
+   - Detects Shell script access
+   - Good for security assessment
 
-📖 HELP
-  • Press ? to show this menu
-  • Check each tab for specific features
+7. TOP DOMAINS
+   - Extracts domain names from data
+   - Ranks by frequency
+   - Shows top 15 domains
+   - Useful for tracking traffic sources
 
-🎯 BEST PRACTICES
-  1. Upload a log file
-  2. Check "Overview" for summary
-  3. Review "Security & Triaj" findings
-  4. Use "Recommended Blocks" to block IPs
-  5. Use "Workplace" for advanced analysis
-  6. Export findings as needed
-    `;
+8. EXPORT CSV
+   - Exports visible table as CSV file
+   - Includes all columns and rows
+   - Auto-generates filename with date
+
+USAGE:
+1. Upload a log file
+2. Click buttons in sidebar to analyze
+3. View results in popup alerts
+4. Export data when needed
+
+HOW TO START:
+- Press ? anytime to see this help
+- Click each button to try features
+- Results show in popup windows`;
     alert(help);
   }
 };
 
-// FEATURE 6: RECOMMENDED IPS TO BLOCK (DATA-AWARE ✅)
+// ========================
+// INITIALIZE FEATURES
+// ========================
+
+// Add feature buttons to sidebar
+function initFeatureButtons() {
+  const sbFoot = document.querySelector('.sbFoot');
+  if (!sbFoot) return;
+
+  const features = [
+    { text: 'Summary', fn: () => DATA_SUMMARY.show() },
+    { text: 'Extract IPs', fn: () => EXTRACT_IPS.show() },
+    { text: 'Extract Paths', fn: () => EXTRACT_PATHS.show() },
+    { text: 'HTTP Codes', fn: () => HTTP_CODES.show() },
+    { text: 'Attack Patterns', fn: () => ATTACK_PATTERNS.show() },
+    { text: 'Top Domains', fn: () => TOP_DOMAINS.show() },
+    { text: 'Export CSV', fn: () => EXPORT_VIEW.exportCsv() },
+    { text: 'Help (?)', fn: () => HELP.show() }
+  ];
+
+  features.forEach(f => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ghost';
+    btn.style.marginTop = '4px';
+    btn.style.width = '100%';
+    btn.innerHTML = f.text;
+    btn.onclick = f.fn;
+    sbFoot.appendChild(btn);
+  });
+}
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.THEME) window.THEME.init();
+  console.log('LOGSCAN - Features Ready');
+  console.log('Press ? for help');
+});
+
+// Keyboard shortcut for help
+document.addEventListener('keydown', (e) => {
+  if (e.key === '?' && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    HELP.show();
+  }
+});
+
+setTimeout(initFeatureButtons, 1500);
+
+// DISABLED: FEATURE 6: RECOMMENDED IPS TO BLOCK (DATA-AWARE ✅)
+// [This feature required data-severity attributes that are not set in the DOM]
+/*
 window.RECOMMENDED_BLOCKS = {
   show: function() {
     const criticalIps = new Map();
@@ -12811,67 +13054,7 @@ window.SEVERITY_DISTRIBUTION = {
   }
 };
 
-// Initialize features on page load
-document.addEventListener('DOMContentLoaded', () => {
-  THEME.init();
-  console.log('✅ LOGSCAN v52.1 - Features loaded');
-  console.log('   Dark mode: Sidebar toggle');
-  console.log('   Recommendations: Available when data loaded');
-  console.log('   Press ? for help');
-});
-
-// Keyboard shortcut for help
-document.addEventListener('keydown', (e) => {
-  if (e.key === '?' && !e.ctrlKey && !e.altKey) {
-    HELP.show();
-  }
-});
-
-// Add feature buttons to sidebar
-const initFeatureButtons = () => {
-  const sbFoot = document.querySelector('.sbFoot');
-  if (!sbFoot) return;
-
-  const buttons = [
-    { text: '📊 Recommendations', onclick: () => RECOMMENDATIONS.show() },
-    { text: '🔍 Filters', onclick: () => QUICK_FILTERS.suggest() },
-    { text: '📥 Export CSV', onclick: () => EXPORT_VIEW.exportCsv() },
-    { text: '🛡️ Recommended Blocks', onclick: () => RECOMMENDED_BLOCKS.show() },
-    { text: '🔒 Security Summary', onclick: () => SECURITY_SUMMARY.show() },
-    { text: '🎯 Threat Level', onclick: () => THREAT_LEVEL.show() },
-    { text: '📈 Quick Stats', onclick: () => QUICK_STATS.show() },
-    { text: '⏱️  Attack Timeline', onclick: () => ATTACK_TIMELINE.show() },
-    { text: '🔴 Repeat Offenders', onclick: () => REPEAT_OFFENDERS.show() },
-    { text: '🎯 Endpoint Risk', onclick: () => ENDPOINT_RISK.show() },
-    { text: '📊 Status Codes', onclick: () => STATUS_BREAKDOWN.show() },
-    { text: '🌍 Countries', onclick: () => COUNTRY_HEATMAP.show() },
-    { text: '🔍 Patterns', onclick: () => SUSPICIOUS_PATTERNS.show() },
-    { text: '📋 Methods', onclick: () => REQUEST_METHODS.show() },
-    { text: '📦 Response Sizes', onclick: () => RESPONSE_SIZES.show() },
-    { text: '⏰ Frequency', onclick: () => FREQUENCY_TIMELINE.show() },
-    { text: '🔍 User Agents', onclick: () => USERAGENT_ANALYSIS.show() },
-    { text: '🌐 IP Reputation', onclick: () => IP_REPUTATION_SUMMARY.show() },
-    { text: '🔗 Referrers', onclick: () => REFERRER_ANALYSIS.show() },
-    { text: '❓ Parameters', onclick: () => PATH_PARAMS.show() },
-    { text: '📉 Error Rate', onclick: () => ERROR_RATE.show() },
-    { text: '💾 Cache Analysis', onclick: () => CACHE_ANALYSIS.show() },
-    { text: '📊 Severity', onclick: () => SEVERITY_DISTRIBUTION.show() },
-    { text: '❓ Help (?)', onclick: () => HELP.show() }
-  ];
-
-  buttons.forEach(btn => {
-    const el = document.createElement('button');
-    el.type = 'button';
-    el.className = 'ghost';
-    el.style.marginTop = '4px';
-    el.style.width = '100%';
-    el.innerHTML = btn.text;
-    el.onclick = btn.onclick;
-    sbFoot.appendChild(el);
-  });
-};
-
-setTimeout(initFeatureButtons, 1000);
+*/
 </script>
 </body>
 </html>
