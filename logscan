@@ -159,5 +159,12 @@ fi
 export LOGSCAN_WORK_ROOT="${LOGSCAN_WORK_ROOT:-/tmp/logscan-work}"
 mkdir -p "$LOGSCAN_WORK_ROOT" && chmod 700 "$LOGSCAN_WORK_ROOT"
 
+# Memorie maxima pentru analiza logurilor: 6.5 GB din 8GB disponibili
+# Permite procesarea de log-uri mari (2-3 GB decomprimat). Suprascrie cu LOGSCAN_MAX_RSS_MB=...
+export LOGSCAN_MAX_RSS_MB="${LOGSCAN_MAX_RSS_MB:-6500}"
+
+# Dimensiunea maxima a upload-ului: 50 GB. Suprascrie cu LOGSCAN_MAX_UPLOAD_MB=...
+export LOGSCAN_MAX_UPLOAD_MB="${LOGSCAN_MAX_UPLOAD_MB:-50000}"
+
 # Start app
 "$VENV_DIR/bin/python" -m uvicorn app:app --host 0.0.0.0 --port "$PORT" $RELOAD
