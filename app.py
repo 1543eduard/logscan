@@ -398,7 +398,7 @@ def _env_int(name: str, default: int, minimum: int = 0) -> int:
         return default
 
 
-MAX_UPLOAD_BYTES = _env_int("LOGSCAN_MAX_UPLOAD_MB", 8192, 1) * 1024 * 1024
+MAX_UPLOAD_BYTES = _env_int("LOGSCAN_MAX_UPLOAD_MB", 50000, 1) * 1024 * 1024
 MAX_ZIP_ENTRIES = _env_int("LOGSCAN_MAX_ZIP_ENTRIES", 2000, 1)
 MAX_UPLOAD_FILES = _env_int("LOGSCAN_MAX_UPLOAD_FILES", 20, 1)
 MAX_ZIP_RATIO = _env_int("LOGSCAN_MAX_ZIP_RATIO", 250, 1)
