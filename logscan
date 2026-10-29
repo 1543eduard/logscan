@@ -155,8 +155,8 @@ if [ "$VPS_IP" != "localhost" ]; then
   export LOGSCAN_ALLOWED_HOSTS="$LOGSCAN_ALLOWED_HOSTS,0.0.0.0"
 fi
 
-# Date temporare in RAM (tmpfs) -- mai rapid decat discul; suprascrie cu LOGSCAN_WORK_ROOT=...
-export LOGSCAN_WORK_ROOT="${LOGSCAN_WORK_ROOT:-/dev/shm/logscan}"
+# Date temporare pe disk (97GB liberi) -- suprascrie cu LOGSCAN_WORK_ROOT=... daca vrei altceva
+export LOGSCAN_WORK_ROOT="${LOGSCAN_WORK_ROOT:-/tmp/logscan-work}"
 mkdir -p "$LOGSCAN_WORK_ROOT" && chmod 700 "$LOGSCAN_WORK_ROOT"
 
 # Start app
