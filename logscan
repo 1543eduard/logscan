@@ -159,9 +159,10 @@ fi
 export LOGSCAN_WORK_ROOT="${LOGSCAN_WORK_ROOT:-/tmp/logscan-work}"
 mkdir -p "$LOGSCAN_WORK_ROOT" && chmod 700 "$LOGSCAN_WORK_ROOT"
 
-# Memorie maxima pentru analiza logurilor: 6.5 GB din 8GB disponibili
-# Permite procesarea de log-uri mari (2-3 GB decomprimat). Suprascrie cu LOGSCAN_MAX_RSS_MB=...
-export LOGSCAN_MAX_RSS_MB="${LOGSCAN_MAX_RSS_MB:-6500}"
+# Fara limita de memorie apriori - las aplicatia sa foloseasca ce are nevoie
+# Cgroup-ul sistemului va limita la 8GB. OOM killer va opri daca se depaseste.
+# Override cu LOGSCAN_MAX_RSS_MB=N daca vrei limita esplicita.
+export LOGSCAN_MAX_RSS_MB="${LOGSCAN_MAX_RSS_MB:-0}"
 
 # Dimensiunea maxima a upload-ului: 50 GB. Suprascrie cu LOGSCAN_MAX_UPLOAD_MB=...
 export LOGSCAN_MAX_UPLOAD_MB="${LOGSCAN_MAX_UPLOAD_MB:-50000}"
