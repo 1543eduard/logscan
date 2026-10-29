@@ -298,82 +298,98 @@
             }
         });
 
-        // Upload
-        uploadBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
-
-            const formData = new FormData();
-            formData.append('files', selectedFile);
-
-            // Show loading with progress
-            const fileName = selectedFile.name;
-            const fileSize = (selectedFile.size / 1024 / 1024).toFixed(1);
+        // Upload v53: gzip in browser + bucati (/api/upload2) + analiza asincrona
+        // (/api/jobs) -- fluxul original rapid din v51, cu toate core-urile CPU.
+        function _isCompressedName(f) { return /\.(gz|tgz|zip|bz2|xz|zst|7z|rar)$/i.test(f.name); }
+        async function _isCompressedFile(f) {
+            if (_isCompressedName(f)) return true;
+            try {
+                const h = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+                return (h[0] === 0x1f && h[1] === 0x8b) || (h[0] === 0x50 && h[1] === 0x4b);
+            } catch (e) { return false; }
+        }
+        function _gzipBlob(blob) {
+            return new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).blob();
+        }
+        async function _json(resp) {
+            let d = {};
+            try { d = await resp.json(); } catch (e) {}
+            if (!resp.ok) throw new Error(d.error || ('HTTP ' + resp.status));
+            return d;
+        }
+        function _setStatus(main, sub, pct) {
             status.className = 'status show loading';
             status.innerHTML = `
-                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                <div style="display:flex;align-items:center;margin-bottom:8px;">
                     <span class="spinner"></span>
-                    <div style="margin-left: 8px;">
-                        <div><strong>Uploading:</strong> ${fileName}</div>
-                        <div class="status-details">${fileSize} MB - Processing with parallel analysis...</div>
-                    </div>
+                    <div style="margin-left:8px;"><div><strong>${main}</strong></div>
+                    <div class="status-details">${sub || ''}</div></div>
                 </div>
-                <div class="progress-bar"><div class="progress-fill"></div></div>
-            `;
+                <div class="progress-bar"><div class="progress-fill" style="width:${Math.max(3, Math.min(100, pct || 0))}%;animation:none"></div></div>`;
+        }
+
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+            const file = selectedFile;
+            const name = file.name.replace(/[<>&"']/g, '');
             results.classList.remove('show');
             uploadBtn.disabled = true;
             selectBtn.disabled = true;
-
-            const startTime = Date.now();
-
+            const t0 = performance.now();
+            const secs = () => ((performance.now() - t0) / 1000).toFixed(1);
             try {
-                // Add timeout after 2 minutes
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000);
+                let srvGz = false;
+                try { srvGz = (await (await fetch('/api/version')).json()).upload_gzip === true; } catch (e) {}
+                const gz = srvGz && typeof CompressionStream === 'function' && !(await _isCompressedFile(file));
+                const CHUNK = (gz ? 16 : 4) * 1024 * 1024;
 
-                const response = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData,
-                    signal: controller.signal
-                });
+                const init = await _json(await fetch('/api/upload2/init', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name, total_size: file.size, encoding: gz ? 'gzip' : '' }),
+                }));
+                const uploadId = init.upload_id;
 
-                clearTimeout(timeoutId);
-
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
+                const prep = (off) => {
+                    const raw = file.slice(off, Math.min(off + CHUNK, file.size));
+                    return gz ? _gzipBlob(raw).then(b => ({ b, n: raw.size })) : Promise.resolve({ b: raw, n: raw.size });
+                };
+                let sent = 0, wire = 0, idx = 0;
+                let next = prep(0);
+                while (next) {
+                    const { b, n } = await next;
+                    next = sent + n < file.size ? prep(sent + n) : null;   // comprima urmatoarea bucata in timp ce o trimite pe asta
+                    await _json(await fetch(`/api/upload2/chunk/${uploadId}?index=${idx}`, { method: 'POST', body: b }));
+                    sent += n; wire += b.size; idx += 1;
+                    const p = Math.round(100 * sent / file.size);
+                    _setStatus(`Se incarca: ${name} (${p}%)`,
+                        `${(sent / 1048576).toFixed(1)} / ${(file.size / 1048576).toFixed(1)} MB` +
+                        (gz ? ` · trimisi comprimat: ${(wire / 1048576).toFixed(1)} MB` : '') + ` · ${secs()}s`, p * 0.5);
                 }
 
-                const data = await response.json();
-                const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-
-                // Show success message
-                status.className = 'status show success';
-                status.innerHTML = `✅ Analysis complete in ${duration}s! Loading full analysis...`;
-
-                // Redirect with dataset_id as URL parameter (SAFE & ATOMIC)
-                if (data.dataset_id) {
-                    console.log('✅ Redirecting to /rezultate with ID:', data.dataset_id);
-                    setTimeout(() => {
-                        window.location.replace('/rezultate?id=' + encodeURIComponent(data.dataset_id));
-                    }, 300);
-                } else {
-                    status.innerHTML = `❌ Error: No dataset ID received`;
+                const comp = await _json(await fetch(`/api/upload2/complete/${uploadId}`, { method: 'POST' }));
+                const LABEL = { queued: 'in asteptare', parsing: 'se parseaza logul', summarizing: 'se calculeaza statisticile',
+                                indexing: 'se indexeaza evenimentele', done: 'gata' };
+                for (;;) {
+                    await new Promise(r => setTimeout(r, 500));
+                    const job = await _json(await fetch(`/api/jobs/${comp.job_id}`));
+                    if (job.status === 'error') throw new Error(job.error || 'Eroare la procesare.');
+                    if (job.status === 'done') {
+                        status.className = 'status show success';
+                        status.innerHTML = `✅ Analiza gata in ${secs()}s. Se deschid rezultatele...`;
+                        window.location.replace('/rezultate?id=' + encodeURIComponent(job.dataset_id));
+                        return;
+                    }
+                    const lines = job.lines_done ? ` · ${Number(job.lines_done).toLocaleString('ro-RO')} linii` : '';
+                    _setStatus(`Analiza: ${LABEL[job.status] || job.status}`, `${name}${lines} · ${secs()}s`,
+                               50 + (Number(job.progress) || 0) / 2);
                 }
-
             } catch (error) {
-                const duration = ((Date.now() - startTime) / 1000).toFixed(1);
                 status.className = 'status show error';
-
-                if (error.name === 'AbortError') {
-                    status.innerHTML = `❌ Timeout after ${duration}s. Log file might be too large or server is busy.`;
-                } else {
-                    status.innerHTML = `❌ Error (${duration}s): ${error.message}`;
-                }
-
+                status.innerHTML = `❌ Eroare dupa ${secs()}s: ${String(error.message).replace(/[<>&]/g, '')}`;
                 uploadBtn.disabled = false;
                 selectBtn.disabled = false;
             }
         });
-
         function displayResults(data) {
             const summary = data.summary || data;
             const datasetId = data.dataset_id;

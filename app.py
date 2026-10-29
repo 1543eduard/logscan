@@ -5808,7 +5808,7 @@ def api_upload(files: List[UploadFile] = File(...), force: bool = Form(default=F
         # OPT-2: Adaptive chunk count based on file size for better parallelism
         file_size = os.path.getsize(plain_path)
         adaptive_workers = _calculate_adaptive_chunks(file_size)
-        merged = run_engine(plain_path, n_workers=adaptive_workers, day_filter=None, segments=file_segments,
+        merged = run_engine(plain_path, n_workers=None, day_filter=None, segments=file_segments,
                             index_workdir=workdir)
         _shards = merged.pop("_shards", [])
         summary = build_summary(merged)
