@@ -13585,7 +13585,55 @@ window.SEVERITY_DISTRIBUTION = {
   }
 };
 
-*/
+
+// TABLE_FEATURES (sters din greseala in 9644e13, folosit de FEATURES_INTERACTIVE)
+window.TABLE_FEATURES = window.TABLE_FEATURES || {
+  getTableData: function() {
+    const data = [];
+    document.querySelectorAll('table tbody tr').forEach(row => {
+      data.push(Array.from(row.querySelectorAll('td, th')).map(c => c.textContent.trim()));
+    });
+    return data;
+  }
+};
+
+// Butoanele feature-urilor in sidebar (initFeatureButtons a fost sters in 9644e13)
+function initFeatureButtons() {
+  const sbFoot = document.querySelector('.sbFoot');
+  if (!sbFoot || sbFoot.querySelector('.featBtn')) return;
+  const F = window.FEATURES_INTERACTIVE || {};
+  const features = [
+    ['Toate IP-urile', () => F.allIPs()], ['Path-uri reale', () => F.realPaths()],
+    ['Coduri HTTP', () => F.codes()], ['Pattern-uri atac', () => F.patterns()],
+    ['Geolocatie', () => F.geoLocation()], ['Threat score', () => F.threatScore()],
+    ['Descarca IP-uri', () => F.downloadIPs()], ['Reguli firewall', () => F.firewallRules()],
+    ['Detectie boti', () => F.botDetection()], ['Analiza pe ore', () => F.timeAnalysis()],
+    ['Export filtrat', () => F.exportFiltered()], ['Selectie multipla', () => F.bulkSelect()],
+    ['Compara IP-uri', () => F.compareIPs()], ['Filtru regex', () => F.regexFilter()],
+    ['Whitelist', () => F.whitelistMode()], ['Timeline atac', () => F.attackTimeline()],
+    ['Reguli blocare rapida', () => F.quickBlockRules()], ['Sesiuni salvate', () => F.saveSessions()],
+    ['Favorite', () => F.pinnedFavorites()], ['Manual', () => F.showManual()],
+    ['Recomandari', () => RECOMMENDATIONS.show()], ['Rezumat securitate', () => SECURITY_SUMMARY.show()],
+    ['Nivel amenintare', () => THREAT_LEVEL.show()], ['Statistici rapide', () => QUICK_STATS.show()],
+    ['Timeline atacuri', () => ATTACK_TIMELINE.show()], ['Recidivisti', () => REPEAT_OFFENDERS.show()],
+    ['Risc endpoint-uri', () => ENDPOINT_RISK.show()], ['Status HTTP', () => STATUS_BREAKDOWN.show()],
+    ['Tari', () => COUNTRY_HEATMAP.show()], ['Pattern-uri suspecte', () => SUSPICIOUS_PATTERNS.show()],
+    ['Metode HTTP', () => REQUEST_METHODS.show()], ['Dimensiuni raspuns', () => RESPONSE_SIZES.show()],
+    ['Frecventa cereri', () => FREQUENCY_TIMELINE.show()], ['User agents', () => USERAGENT_ANALYSIS.show()],
+    ['Reputatie IP', () => IP_REPUTATION_SUMMARY.show()], ['Referreri', () => REFERRER_ANALYSIS.show()],
+    ['Parametri path', () => PATH_PARAMS.show()], ['Rata erori', () => ERROR_RATE.show()],
+    ['Static vs dinamic', () => CACHE_ANALYSIS.show()], ['Severitate', () => SEVERITY_DISTRIBUTION.show()],
+    ['Export CSV', () => EXPORT_VIEW.exportCsv()]
+  ];
+  features.forEach(([text, fn]) => {
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'ghost featBtn'; btn.textContent = text;
+    btn.onclick = () => { try { fn(); } catch (e) { console.error('Feature "' + text + '":', e); alert('Eroare la "' + text + '": ' + e.message); } };
+    sbFoot.appendChild(btn);
+  });
+  if (window.THEME && THEME.init) { try { THEME.init(); } catch (e) {} }
+}
+setTimeout(initFeatureButtons, 500);
 
 // Auto-load dataset from URL parameter (MANDATORY)
 (function autoLoadDataset() {
@@ -13615,6 +13663,7 @@ window.SEVERITY_DISTRIBUTION = {
       const days = summary.days_available || [];
 
       // CALL UPLOAD SUCCESS - this shows dashboard, hides upload
+      dropzone.style.display = 'none';
       _onUploadSuccess({
         dataset_id: datasetId,
         filename: summary.filename || 'Analysis Results',
